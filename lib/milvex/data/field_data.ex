@@ -270,60 +270,71 @@ defmodule Milvex.Data.FieldData do
   end
 
   defp encode_float16_vectors(vectors) do
-    vectors
-    |> Enum.flat_map(&encode_float16_vector/1)
-    |> IO.iodata_to_binary()
-  end
-
-  defp encode_float16_vector(vector) do
-    Enum.map(vector, &float_to_float16/1)
+    encode_typed_vectors(vectors, :f16)
   end
 
   defp decode_float16_vectors(binary, dim) do
-    bytes_per_vector = dim * 2
-
-    for <<chunk::binary-size(bytes_per_vector) <- binary>> do
-      for <<f16::16-little <- chunk>>, do: float16_to_float(f16)
-    end
+    decode_typed_vectors(binary, dim, :f16)
   end
 
   defp encode_bfloat16_vectors(vectors) do
-    vectors
-    |> Enum.flat_map(&encode_bfloat16_vector/1)
-    |> IO.iodata_to_binary()
-  end
-
-  defp encode_bfloat16_vector(vector) do
-    Enum.map(vector, &float_to_bfloat16/1)
+    encode_typed_vectors(vectors, :bf16)
   end
 
   defp decode_bfloat16_vectors(binary, dim) do
-    bytes_per_vector = dim * 2
-
-    for <<chunk::binary-size(bytes_per_vector) <- binary>> do
-      for <<bf16::16-little <- chunk>>, do: bfloat16_to_float(bf16)
-    end
+    decode_typed_vectors(binary, dim, :bf16)
   end
 
   defp encode_int8_vectors(vectors) do
-    vectors
-    |> List.flatten()
-    |> Enum.map(&unsigned_int8/1)
-    |> :binary.list_to_bin()
+    encode_typed_vectors(vectors, :s8)
   end
 
-  defp unsigned_int8(byte) when byte < 0, do: byte + 256
-  defp unsigned_int8(byte), do: byte
+  defp encode_typed_vectors([], _type), do: <<>>
+
+  defp encode_typed_vectors([first | _] = vectors, _type) when is_binary(first) do
+    IO.iodata_to_binary(vectors)
+  end
+
+  defp encode_typed_vectors([first | _] = vectors, type) when is_struct(first, Nx.Tensor) do
+    vectors
+    |> Nx.stack()
+    |> Nx.as_type(type)
+    |> Nx.to_binary()
+  end
+
+  defp encode_typed_vectors([first | _] = vectors, type) when is_list(first) do
+    require_nx!()
+
+    vectors
+    |> Nx.tensor(type: type)
+    |> Nx.to_binary()
+  end
+
+  defp require_nx! do
+    unless Code.ensure_loaded?(Nx) do
+      raise ArgumentError, """
+      Nx is required to convert lists of floats to float16/bfloat16/int8 vectors.
+
+      Either:
+      1. Add {:nx, "~> 0.9"} to your dependencies
+      2. Pass raw binary data instead
+      3. Pass Nx tensors directly
+      """
+    end
+  end
 
   defp decode_int8_vectors(binary, dim) do
-    binary
-    |> :binary.bin_to_list()
-    |> Enum.map(&signed_int8/1)
-    |> Enum.chunk_every(dim)
+    decode_typed_vectors(binary, dim, :s8)
   end
 
-  defp signed_int8(byte) when byte > 127, do: byte - 256
-  defp signed_int8(byte), do: byte
+  defp decode_typed_vectors(binary, dim, type) do
+    require_nx!()
+
+    binary
+    |> Nx.from_binary(type)
+    |> Nx.reshape({:auto, dim})
+    |> Nx.to_list()
+  end
 
   defp encode_sparse_vectors(vectors) do
     {contents, dims} =
@@ -366,46 +377,6 @@ defmodule Milvex.Data.FieldData do
 
   defp decode_sparse_pairs(<<idx::32-little-unsigned, val::32-little-float, rest::binary>>, acc) do
     decode_sparse_pairs(rest, [{idx, val} | acc])
-  end
-
-  defp float_to_float16(f) when is_float(f) do
-    <<sign::1, exp::8, mantissa::23>> = <<f::32-float>>
-
-    {f16_exp, f16_mantissa} =
-      cond do
-        exp == 0 -> {0, 0}
-        exp == 255 -> {31, mantissa >>> 13}
-        exp < 113 -> {0, 0}
-        exp > 142 -> {31, 0}
-        true -> {exp - 112, mantissa >>> 13}
-      end
-
-    <<sign::1, f16_exp::5, f16_mantissa::10>>
-  end
-
-  defp float16_to_float(f16) do
-    <<sign::1, exp::5, mantissa::10>> = <<f16::16>>
-
-    {f32_exp, f32_mantissa} =
-      cond do
-        exp == 0 -> {0, 0}
-        exp == 31 -> {255, mantissa <<< 13}
-        true -> {exp + 112, mantissa <<< 13}
-      end
-
-    <<result::32-float>> = <<sign::1, f32_exp::8, f32_mantissa::23>>
-    result
-  end
-
-  defp float_to_bfloat16(f) when is_float(f) do
-    <<hi::16, _lo::16>> = <<f::32-float>>
-    <<hi::16-little>>
-  end
-
-  defp bfloat16_to_float(bf16) do
-    <<hi::16>> = <<bf16::16-little>>
-    <<result::32-float>> = <<hi::16, 0::16>>
-    result
   end
 
   defp data_type_to_proto(:bool), do: :Bool
