@@ -23,6 +23,7 @@ defmodule Milvex.MixProject do
       {:castore, "~> 1.0"},
       {:gen_state_machine, "~> 3.0"},
       {:grpc, "~> 0.11.5"},
+      {:jason, "~> 1.4"},
       {:protobuf, "~> 0.15.0"},
       {:splode, "~> 0.2.9"},
       {:zoi, "~> 0.11"},
