@@ -1,86 +1,50 @@
 defmodule Milvex do
   @moduledoc """
   High-level client API for Milvus vector database.
-
-  Provides simplified functions for collection management, data operations,
-  and vector search. All operations accept a connection (pid or name) and
-  return `{:ok, result}` or `{:error, Milvex.Error.t()}`.
-
-  ## Default Configuration
-
-  - Consistency level: `:Bounded`
-  - Database: "" (Milvus default)
-  - Shards: 1
-
-  ## Examples
-
-      {:ok, conn} = Milvex.Connection.start_link(host: "localhost", port: 19530)
-
-      schema = Milvex.Schema.build!(
-        name: "movies",
-        fields: [
-          Field.primary_key("id", :int64, auto_id: true),
-          Field.varchar("title", 512),
-          Field.vector("embedding", 128)
-        ]
-      )
-
-      :ok = Milvex.create_collection(conn, "movies", schema)
-      :ok = Milvex.load_collection(conn, "movies")
-
-      {:ok, result} = Milvex.insert(conn, "movies", [
-        %{title: "Movie 1", embedding: [0.1, 0.2, ...]},
-        %{title: "Movie 2", embedding: [0.3, 0.4, ...]}
-      ])
-
-      {:ok, search_result} = Milvex.search(conn, "movies", [[0.1, 0.2, ...]],
-        vector_field: "embedding",
-        top_k: 10,
-        output_fields: ["title"]
-      )
   """
 
-  alias Milvex.{Connection, Data, Error, Index, QueryResult, RPC, Schema, SearchResult}
+  alias Milvex.Connection
+  alias Milvex.Data
+  alias Milvex.Error
   alias Milvex.Errors.Invalid
+  alias Milvex.Index
+  alias Milvex.QueryResult
+  alias Milvex.RPC
+  alias Milvex.Schema
   alias Milvex.Schema.Field
+  alias Milvex.SearchResult
 
-  alias Milvex.Milvus.Proto.Common.{
-    KeyValuePair,
-    PlaceholderGroup,
-    PlaceholderValue
-  }
+  alias Milvex.Milvus.Proto.Common.KeyValuePair
+  alias Milvex.Milvus.Proto.Common.PlaceholderGroup
+  alias Milvex.Milvus.Proto.Common.PlaceholderValue
 
-  alias Milvex.Milvus.Proto.Schema.{
-    CollectionSchema,
-    IDs,
-    LongArray,
-    StringArray
-  }
+  alias Milvex.Milvus.Proto.Schema.CollectionSchema
+  alias Milvex.Milvus.Proto.Schema.IDs
+  alias Milvex.Milvus.Proto.Schema.LongArray
+  alias Milvex.Milvus.Proto.Schema.StringArray
 
-  alias Milvex.Milvus.Proto.Milvus.{
-    CreateCollectionRequest,
-    CreateIndexRequest,
-    CreatePartitionRequest,
-    DeleteRequest,
-    DescribeCollectionRequest,
-    DescribeIndexRequest,
-    DropCollectionRequest,
-    DropIndexRequest,
-    DropPartitionRequest,
-    HasCollectionRequest,
-    HasPartitionRequest,
-    InsertRequest,
-    LoadCollectionRequest,
-    LoadPartitionsRequest,
-    MilvusService,
-    QueryRequest,
-    ReleaseCollectionRequest,
-    ReleasePartitionsRequest,
-    SearchRequest,
-    ShowCollectionsRequest,
-    ShowPartitionsRequest,
-    UpsertRequest
-  }
+  alias Milvex.Milvus.Proto.Milvus.CreateCollectionRequest
+  alias Milvex.Milvus.Proto.Milvus.CreateIndexRequest
+  alias Milvex.Milvus.Proto.Milvus.CreatePartitionRequest
+  alias Milvex.Milvus.Proto.Milvus.DeleteRequest
+  alias Milvex.Milvus.Proto.Milvus.DescribeCollectionRequest
+  alias Milvex.Milvus.Proto.Milvus.DescribeIndexRequest
+  alias Milvex.Milvus.Proto.Milvus.DropCollectionRequest
+  alias Milvex.Milvus.Proto.Milvus.DropIndexRequest
+  alias Milvex.Milvus.Proto.Milvus.DropPartitionRequest
+  alias Milvex.Milvus.Proto.Milvus.HasCollectionRequest
+  alias Milvex.Milvus.Proto.Milvus.HasPartitionRequest
+  alias Milvex.Milvus.Proto.Milvus.InsertRequest
+  alias Milvex.Milvus.Proto.Milvus.LoadCollectionRequest
+  alias Milvex.Milvus.Proto.Milvus.LoadPartitionsRequest
+  alias Milvex.Milvus.Proto.Milvus.MilvusService
+  alias Milvex.Milvus.Proto.Milvus.QueryRequest
+  alias Milvex.Milvus.Proto.Milvus.ReleaseCollectionRequest
+  alias Milvex.Milvus.Proto.Milvus.ReleasePartitionsRequest
+  alias Milvex.Milvus.Proto.Milvus.SearchRequest
+  alias Milvex.Milvus.Proto.Milvus.ShowCollectionsRequest
+  alias Milvex.Milvus.Proto.Milvus.ShowPartitionsRequest
+  alias Milvex.Milvus.Proto.Milvus.UpsertRequest
 
   @default_consistency_level :Bounded
   @default_shards_num 1
@@ -133,15 +97,8 @@ defmodule Milvex do
         consistency_level: get_consistency_level(opts)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :create_collection, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "CreateCollection") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :create_collection, request) do
+        RPC.check_status(response, "CreateCollection")
       end
     end
   end
@@ -183,15 +140,8 @@ defmodule Milvex do
         collection_name: name
       }
 
-      case RPC.call(channel, MilvusService.Stub, :drop_collection, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "DropCollection") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :drop_collection, request) do
+        RPC.check_status(response, "DropCollection")
       end
     end
   end
@@ -235,15 +185,9 @@ defmodule Milvex do
         collection_name: name
       }
 
-      case RPC.call(channel, MilvusService.Stub, :has_collection, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "HasCollection") do
-            {:ok, resp} -> {:ok, resp.value}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :has_collection, request),
+           {:ok, resp} <- RPC.with_status_check(response, "HasCollection") do
+        {:ok, resp.value}
       end
     end
   end
@@ -292,26 +236,17 @@ defmodule Milvex do
         collection_name: name
       }
 
-      case RPC.call(channel, MilvusService.Stub, :describe_collection, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "DescribeCollection") do
-            {:ok, resp} ->
-              {:ok,
-               %{
-                 schema: Schema.from_proto(resp.schema),
-                 collection_id: resp.collectionID,
-                 shards_num: resp.shards_num,
-                 consistency_level: resp.consistency_level,
-                 created_timestamp: resp.created_timestamp,
-                 aliases: resp.aliases
-               }}
-
-            error ->
-              error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :describe_collection, request),
+           {:ok, resp} <- RPC.with_status_check(response, "DescribeCollection") do
+        {:ok,
+         %{
+           schema: Schema.from_proto(resp.schema),
+           collection_id: resp.collectionID,
+           shards_num: resp.shards_num,
+           consistency_level: resp.consistency_level,
+           created_timestamp: resp.created_timestamp,
+           aliases: resp.aliases
+         }}
       end
     end
   end
@@ -352,15 +287,9 @@ defmodule Milvex do
         db_name: get_db_name(opts)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :show_collections, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "ShowCollections") do
-            {:ok, resp} -> {:ok, resp.collection_names}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :show_collections, request),
+           {:ok, resp} <- RPC.with_status_check(response, "ShowCollections") do
+        {:ok, resp.collection_names}
       end
     end
   end
@@ -404,15 +333,8 @@ defmodule Milvex do
         replica_number: Keyword.get(opts, :replica_number, 1)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :load_collection, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "LoadCollection") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :load_collection, request) do
+        RPC.check_status(response, "LoadCollection")
       end
     end
   end
@@ -454,15 +376,8 @@ defmodule Milvex do
         collection_name: name
       }
 
-      case RPC.call(channel, MilvusService.Stub, :release_collection, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "ReleaseCollection") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :release_collection, request) do
+        RPC.check_status(response, "ReleaseCollection")
       end
     end
   end
@@ -532,15 +447,8 @@ defmodule Milvex do
         extra_params: Index.to_extra_params(index)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :create_index, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "CreateIndex") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :create_index, request) do
+        RPC.check_status(response, "CreateIndex")
       end
     end
   end
@@ -557,15 +465,8 @@ defmodule Milvex do
         extra_params: extra_params
       }
 
-      case RPC.call(channel, MilvusService.Stub, :create_index, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "CreateIndex") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :create_index, request) do
+        RPC.check_status(response, "CreateIndex")
       end
     end
   end
@@ -617,15 +518,8 @@ defmodule Milvex do
         index_name: Keyword.get(opts, :index_name, "")
       }
 
-      case RPC.call(channel, MilvusService.Stub, :drop_index, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "DropIndex") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :drop_index, request) do
+        RPC.check_status(response, "DropIndex")
       end
     end
   end
@@ -672,15 +566,9 @@ defmodule Milvex do
         index_name: Keyword.get(opts, :index_name, "")
       }
 
-      case RPC.call(channel, MilvusService.Stub, :describe_index, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "DescribeIndex") do
-            {:ok, resp} -> {:ok, resp.index_descriptions}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :describe_index, request),
+           {:ok, resp} <- RPC.with_status_check(response, "DescribeIndex") do
+        {:ok, resp.index_descriptions}
       end
     end
   end
@@ -773,22 +661,13 @@ defmodule Milvex do
         num_rows: Data.num_rows(prepared_data)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :insert, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "Insert") do
-            {:ok, resp} ->
-              {:ok,
-               %{
-                 insert_count: resp.insert_cnt,
-                 ids: extract_ids(resp."IDs")
-               }}
-
-            error ->
-              error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :insert, request),
+           {:ok, resp} <- RPC.with_status_check(response, "Insert") do
+        {:ok,
+         %{
+           insert_count: resp.insert_cnt,
+           ids: extract_ids(resp."IDs")
+         }}
       end
     end
   end
@@ -844,15 +723,9 @@ defmodule Milvex do
         consistency_level: get_consistency_level(opts)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :delete, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "Delete") do
-            {:ok, resp} -> {:ok, %{delete_count: resp.delete_cnt}}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :delete, request),
+           {:ok, resp} <- RPC.with_status_check(response, "Delete") do
+        {:ok, %{delete_count: resp.delete_cnt}}
       end
     end
   end
@@ -905,22 +778,13 @@ defmodule Milvex do
         num_rows: Data.num_rows(prepared_data)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :upsert, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "Upsert") do
-            {:ok, resp} ->
-              {:ok,
-               %{
-                 upsert_count: resp.upsert_cnt,
-                 ids: extract_ids(resp."IDs")
-               }}
-
-            error ->
-              error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :upsert, request),
+           {:ok, resp} <- RPC.with_status_check(response, "Upsert") do
+        {:ok,
+         %{
+           upsert_count: resp.upsert_cnt,
+           ids: extract_ids(resp."IDs")
+         }}
       end
     end
   end
@@ -984,15 +848,9 @@ defmodule Milvex do
         consistency_level: get_consistency_level(opts)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :query, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "Query") do
-            {:ok, resp} -> {:ok, QueryResult.from_proto(resp)}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :query, request),
+           {:ok, resp} <- RPC.with_status_check(response, "Query") do
+        {:ok, QueryResult.from_proto(resp)}
       end
     end
   end
@@ -1071,15 +929,9 @@ defmodule Milvex do
         consistency_level: get_consistency_level(opts)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :search, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "Search") do
-            {:ok, resp} -> {:ok, SearchResult.from_proto(resp)}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :search, request),
+           {:ok, resp} <- RPC.with_status_check(response, "Search") do
+        {:ok, SearchResult.from_proto(resp)}
       end
     end
   end
@@ -1132,15 +984,8 @@ defmodule Milvex do
         partition_name: partition_name
       }
 
-      case RPC.call(channel, MilvusService.Stub, :create_partition, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "CreatePartition") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :create_partition, request) do
+        RPC.check_status(response, "CreatePartition")
       end
     end
   end
@@ -1189,15 +1034,8 @@ defmodule Milvex do
         partition_name: partition_name
       }
 
-      case RPC.call(channel, MilvusService.Stub, :drop_partition, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "DropPartition") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :drop_partition, request) do
+        RPC.check_status(response, "DropPartition")
       end
     end
   end
@@ -1247,15 +1085,9 @@ defmodule Milvex do
         partition_name: partition_name
       }
 
-      case RPC.call(channel, MilvusService.Stub, :has_partition, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "HasPartition") do
-            {:ok, resp} -> {:ok, resp.value}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :has_partition, request),
+           {:ok, resp} <- RPC.with_status_check(response, "HasPartition") do
+        {:ok, resp.value}
       end
     end
   end
@@ -1302,15 +1134,9 @@ defmodule Milvex do
         collection_name: collection
       }
 
-      case RPC.call(channel, MilvusService.Stub, :show_partitions, request) do
-        {:ok, response} ->
-          case RPC.with_status_check(response, "ShowPartitions") do
-            {:ok, resp} -> {:ok, resp.partition_names}
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :show_partitions, request),
+           {:ok, resp} <- RPC.with_status_check(response, "ShowPartitions") do
+        {:ok, resp.partition_names}
       end
     end
   end
@@ -1361,15 +1187,8 @@ defmodule Milvex do
         replica_number: Keyword.get(opts, :replica_number, 1)
       }
 
-      case RPC.call(channel, MilvusService.Stub, :load_partitions, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "LoadPartitions") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :load_partitions, request) do
+        RPC.check_status(response, "LoadPartitions")
       end
     end
   end
@@ -1418,15 +1237,8 @@ defmodule Milvex do
         partition_names: partition_names
       }
 
-      case RPC.call(channel, MilvusService.Stub, :release_partitions, request) do
-        {:ok, response} ->
-          case RPC.check_status(response, "ReleasePartitions") do
-            :ok -> :ok
-            error -> error
-          end
-
-        error ->
-          error
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :release_partitions, request) do
+        RPC.check_status(response, "ReleasePartitions")
       end
     end
   end

@@ -28,7 +28,10 @@ defmodule Milvex.SearchResult do
 
   alias Milvex.Data.FieldData
   alias Milvex.Milvus.Proto.Milvus.SearchResults
-  alias Milvex.Milvus.Proto.Schema.{IDs, LongArray, SearchResultData, StringArray}
+  alias Milvex.Milvus.Proto.Schema.IDs
+  alias Milvex.Milvus.Proto.Schema.LongArray
+  alias Milvex.Milvus.Proto.Schema.SearchResultData
+  alias Milvex.Milvus.Proto.Schema.StringArray
 
   defmodule Hit do
     @moduledoc """

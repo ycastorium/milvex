@@ -1,12 +1,12 @@
 defmodule Milvex.MilvusContainer do
   @moduledoc false
 
-  alias Testcontainers.Container
   alias Testcontainers.CommandWaitStrategy
+  alias Testcontainers.Container
   alias Testcontainers.LogWaitStrategy
 
-  alias DockerEngineAPI.Api.Network, as: NetworkApi
   alias DockerEngineAPI.Api.Container, as: ContainerApi
+  alias DockerEngineAPI.Api.Network, as: NetworkApi
   alias DockerEngineAPI.Model.NetworkCreateRequest
 
   @etcd_image "quay.io/coreos/etcd:v3.5.18"

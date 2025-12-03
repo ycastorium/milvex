@@ -4,9 +4,10 @@ defmodule MilvexIntegrationTest do
 
   @moduletag :integration
 
-  alias Milvex.{Schema, Data}
-  alias Milvex.Schema.Field
+  alias Milvex.Data
   alias Milvex.MilvusContainer
+  alias Milvex.Schema
+  alias Milvex.Schema.Field
 
   @collection_name "test_movies"
 

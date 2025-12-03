@@ -9,7 +9,12 @@ defmodule Milvex.Integration.SearchQueryTest do
       schema = standard_schema(name)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       rows = [
         %{title: "The Matrix", embedding: [1.0, 0.0, 0.0, 0.0]},
@@ -54,11 +59,12 @@ defmodule Milvex.Integration.SearchQueryTest do
       query_vector = [1.0, 0.0, 0.0, 0.0]
 
       assert_eventually(fn ->
-        with {:ok, result} <- Milvex.search(conn, name, [query_vector],
-               vector_field: "embedding",
-               top_k: 1,
-               output_fields: ["title"]
-             ),
+        with {:ok, result} <-
+               Milvex.search(conn, name, [query_vector],
+                 vector_field: "embedding",
+                 top_k: 1,
+                 output_fields: ["title"]
+               ),
              [hit | _] <- result.hits,
              [first | _] <- hit do
           Map.has_key?(first, :title) or Map.has_key?(first, "title")
@@ -72,12 +78,13 @@ defmodule Milvex.Integration.SearchQueryTest do
       query_vector = [0.5, 0.5, 0.5, 0.5]
 
       assert_eventually(fn ->
-        with {:ok, result} <- Milvex.search(conn, name, [query_vector],
-               vector_field: "embedding",
-               top_k: 10,
-               filter: "title like \"The%\"",
-               output_fields: ["title"]
-             ),
+        with {:ok, result} <-
+               Milvex.search(conn, name, [query_vector],
+                 vector_field: "embedding",
+                 top_k: 10,
+                 filter: "title like \"The%\"",
+                 output_fields: ["title"]
+               ),
              [results | _] <- result.hits do
           length(results) == 1
         else
@@ -94,9 +101,9 @@ defmodule Milvex.Integration.SearchQueryTest do
 
       assert_eventually(fn ->
         case Milvex.search(conn, name, query_vectors,
-          vector_field: "embedding",
-          top_k: 2
-        ) do
+               vector_field: "embedding",
+               top_k: 2
+             ) do
           {:ok, result} -> result.num_queries == 2 and length(result.hits) == 2
           _ -> false
         end
@@ -117,13 +124,21 @@ defmodule Milvex.Integration.SearchQueryTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       query_vector = [1.0, 0.0, 0.0, 0.0]
-      assert {:error, error} = Milvex.search(conn, name, [query_vector],
-        vector_field: "embedding",
-        top_k: 3
-      )
+
+      assert {:error, error} =
+               Milvex.search(conn, name, [query_vector],
+                 vector_field: "embedding",
+                 top_k: 3
+               )
+
       assert %Milvex.Errors.Grpc{} = error
     end
   end
@@ -136,7 +151,9 @@ defmodule Milvex.Integration.SearchQueryTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "L2")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "L2")
 
       rows = sample_rows(5)
       data = Data.from_rows!(rows, schema)
@@ -160,7 +177,9 @@ defmodule Milvex.Integration.SearchQueryTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "IP")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "IP")
 
       rows = sample_rows(5)
       data = Data.from_rows!(rows, schema)
@@ -184,7 +203,12 @@ defmodule Milvex.Integration.SearchQueryTest do
       schema = manual_id_schema(name)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       rows = sample_rows_with_ids(10, start_id: 1)
       data = Data.from_rows!(rows, schema)
@@ -207,10 +231,11 @@ defmodule Milvex.Integration.SearchQueryTest do
 
     test "returns specified output_fields", %{conn: conn, collection_name: name} do
       assert_eventually(fn ->
-        with {:ok, result} <- Milvex.query(conn, name, "id > 0",
-               output_fields: ["id", "title"],
-               limit: 5
-             ),
+        with {:ok, result} <-
+               Milvex.query(conn, name, "id > 0",
+                 output_fields: ["id", "title"],
+                 limit: 5
+               ),
              [row | _] <- result.rows do
           Map.has_key?(row, :id) and Map.has_key?(row, :title)
         else
@@ -249,7 +274,12 @@ defmodule Milvex.Integration.SearchQueryTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       assert {:error, error} = Milvex.query(conn, name, "id > 0", limit: 10)
       assert %Milvex.Errors.Grpc{} = error
@@ -272,7 +302,12 @@ defmodule Milvex.Integration.SearchQueryTest do
       :ok = Milvex.create_collection(conn, name, schema)
       :ok = Milvex.create_partition(conn, name, partition1)
       :ok = Milvex.create_partition(conn, name, partition2)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       rows_a = sample_rows_with_ids(3, start_id: 1)
       data_a = Data.from_rows!(rows_a, schema)
@@ -286,9 +321,9 @@ defmodule Milvex.Integration.SearchQueryTest do
 
       assert_eventually(fn ->
         case Milvex.query(conn, name, "id > 0",
-          partition_names: [partition1],
-          limit: 20
-        ) do
+               partition_names: [partition1],
+               limit: 20
+             ) do
           {:ok, result} -> length(result.rows) == 3
           _ -> false
         end

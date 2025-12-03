@@ -161,7 +161,12 @@ defmodule Milvex.Integration.PartitionTest do
 
       :ok = Milvex.create_collection(conn, name, schema)
       :ok = Milvex.create_partition(conn, name, partition)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       assert :ok = Milvex.load_partitions(conn, name, [partition])
     end
@@ -197,7 +202,13 @@ defmodule Milvex.Integration.PartitionTest do
 
       :ok = Milvex.create_collection(conn, name, schema)
       :ok = Milvex.create_partition(conn, name, partition)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
+
       :ok = Milvex.load_partitions(conn, name, [partition])
 
       assert :ok = Milvex.release_partitions(conn, name, [partition])
@@ -238,7 +249,12 @@ defmodule Milvex.Integration.PartitionTest do
       :ok = Milvex.create_collection(conn, name, schema)
       :ok = Milvex.create_partition(conn, name, partition1)
       :ok = Milvex.create_partition(conn, name, partition2)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       data1 = sample_data(schema, 5)
       {:ok, _} = Milvex.insert(conn, name, data1, partition_name: partition1)
@@ -251,11 +267,12 @@ defmodule Milvex.Integration.PartitionTest do
       query_vector = random_vector(4)
 
       assert_eventually(fn ->
-        with {:ok, result} <- Milvex.search(conn, name, [query_vector],
-               vector_field: "embedding",
-               top_k: 20,
-               partition_names: [partition1]
-             ),
+        with {:ok, result} <-
+               Milvex.search(conn, name, [query_vector],
+                 vector_field: "embedding",
+                 top_k: 20,
+                 partition_names: [partition1]
+               ),
              [results | _] <- result.hits do
           length(results) <= 5
         else

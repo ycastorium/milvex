@@ -4,18 +4,16 @@ defmodule Milvex.Data.FieldDataTest do
   alias Milvex.Data.FieldData
   alias Milvex.Schema.Field
 
-  alias Milvex.Milvus.Proto.Schema.{
-    BoolArray,
-    DoubleArray,
-    FloatArray,
-    IntArray,
-    JSONArray,
-    LongArray,
-    ScalarField,
-    SparseFloatArray,
-    StringArray,
-    VectorField
-  }
+  alias Milvex.Milvus.Proto.Schema.BoolArray
+  alias Milvex.Milvus.Proto.Schema.DoubleArray
+  alias Milvex.Milvus.Proto.Schema.FloatArray
+  alias Milvex.Milvus.Proto.Schema.IntArray
+  alias Milvex.Milvus.Proto.Schema.JSONArray
+  alias Milvex.Milvus.Proto.Schema.LongArray
+  alias Milvex.Milvus.Proto.Schema.ScalarField
+  alias Milvex.Milvus.Proto.Schema.SparseFloatArray
+  alias Milvex.Milvus.Proto.Schema.StringArray
+  alias Milvex.Milvus.Proto.Schema.VectorField
 
   alias Milvex.Milvus.Proto.Schema.FieldData, as: FieldDataProto
 

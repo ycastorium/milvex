@@ -12,7 +12,9 @@ defmodule Milvex.IntegrationCase do
     quote do
       use AssertEventually, timeout: 5000, interval: 200
       import Milvex.IntegrationCase.Helpers
-      alias Milvex.{Schema, Data, Index}
+      alias Milvex.Data
+      alias Milvex.Index
+      alias Milvex.Schema
       alias Milvex.Schema.Field
     end
   end
@@ -42,7 +44,8 @@ defmodule Milvex.IntegrationCase.Helpers do
   Helper functions for integration tests.
   """
 
-  alias Milvex.{Schema, Data}
+  alias Milvex.Data
+  alias Milvex.Schema
   alias Milvex.Schema.Field
 
   @doc """
@@ -180,7 +183,10 @@ defmodule Milvex.IntegrationCase.Helpers do
     schema = standard_schema(name)
 
     :ok = Milvex.create_collection(conn, name, schema)
-    :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+    :ok =
+      Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
     :ok = Milvex.load_collection(conn, name)
 
     {name, schema}

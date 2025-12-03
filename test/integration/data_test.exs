@@ -116,7 +116,12 @@ defmodule Milvex.Integration.DataTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       rows = sample_rows_with_ids(5, start_id: 1)
       data = Data.from_rows!(rows, schema)
@@ -135,7 +140,12 @@ defmodule Milvex.Integration.DataTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       rows = sample_rows_with_ids(5, start_id: 1)
       data = Data.from_rows!(rows, schema)
@@ -161,7 +171,13 @@ defmodule Milvex.Integration.DataTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
+
       :ok = Milvex.load_collection(conn, name)
 
       assert {:error, error} = Milvex.delete(conn, name, "invalid syntax !!!")
@@ -193,7 +209,12 @@ defmodule Milvex.Integration.DataTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       initial_rows = sample_rows_with_ids(3, start_id: 1)
       initial_data = Data.from_rows!(initial_rows, schema)
@@ -206,6 +227,7 @@ defmodule Milvex.Integration.DataTest do
         %{id: 2, title: "Updated Item 2", embedding: random_vector(4)},
         %{id: 4, title: "New Item 4", embedding: random_vector(4)}
       ]
+
       updated_data = Data.from_rows!(updated_rows, schema)
 
       assert {:ok, result} = Milvex.upsert(conn, name, updated_data)

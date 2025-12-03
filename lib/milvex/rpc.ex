@@ -24,7 +24,8 @@ defmodule Milvex.RPC do
   """
 
   alias Milvex.Error
-  alias Milvex.Errors.{Connection, Grpc}
+  alias Milvex.Errors.Connection
+  alias Milvex.Errors.Grpc
   alias Milvex.Milvus.Proto.Common.Status
 
   @type rpc_result :: {:ok, struct()} | {:error, Error.t()}

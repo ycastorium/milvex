@@ -10,19 +10,17 @@ defmodule Milvex.Data.FieldData do
 
   alias Milvex.Schema.Field
 
-  alias Milvex.Milvus.Proto.Schema.{
-    BoolArray,
-    DoubleArray,
-    FieldData,
-    FloatArray,
-    IntArray,
-    JSONArray,
-    LongArray,
-    ScalarField,
-    SparseFloatArray,
-    StringArray,
-    VectorField
-  }
+  alias Milvex.Milvus.Proto.Schema.BoolArray
+  alias Milvex.Milvus.Proto.Schema.DoubleArray
+  alias Milvex.Milvus.Proto.Schema.FieldData
+  alias Milvex.Milvus.Proto.Schema.FloatArray
+  alias Milvex.Milvus.Proto.Schema.IntArray
+  alias Milvex.Milvus.Proto.Schema.JSONArray
+  alias Milvex.Milvus.Proto.Schema.LongArray
+  alias Milvex.Milvus.Proto.Schema.ScalarField
+  alias Milvex.Milvus.Proto.Schema.SparseFloatArray
+  alias Milvex.Milvus.Proto.Schema.StringArray
+  alias Milvex.Milvus.Proto.Schema.VectorField
 
   @doc """
   Converts a column of values to a FieldData proto struct.

@@ -1,17 +1,15 @@
 defmodule Milvex.QueryResultTest do
   use ExUnit.Case, async: true
 
-  alias Milvex.QueryResult
   alias Milvex.Milvus.Proto.Milvus.QueryResults
+  alias Milvex.QueryResult
 
-  alias Milvex.Milvus.Proto.Schema.{
-    FieldData,
-    FloatArray,
-    LongArray,
-    ScalarField,
-    StringArray,
-    VectorField
-  }
+  alias Milvex.Milvus.Proto.Schema.FieldData
+  alias Milvex.Milvus.Proto.Schema.FloatArray
+  alias Milvex.Milvus.Proto.Schema.LongArray
+  alias Milvex.Milvus.Proto.Schema.ScalarField
+  alias Milvex.Milvus.Proto.Schema.StringArray
+  alias Milvex.Milvus.Proto.Schema.VectorField
 
   describe "from_proto/1" do
     test "parses empty result" do

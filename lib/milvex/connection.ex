@@ -39,7 +39,8 @@ defmodule Milvex.Connection do
   require Logger
 
   alias Milvex.Config
-  alias Milvex.Milvus.Proto.Milvus.{CheckHealthRequest, MilvusService}
+  alias Milvex.Milvus.Proto.Milvus.CheckHealthRequest
+  alias Milvex.Milvus.Proto.Milvus.MilvusService
 
   @health_check_interval 30_000
   @reconnect_delay 5_000

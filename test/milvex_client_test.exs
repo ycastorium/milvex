@@ -3,23 +3,31 @@ defmodule MilvexClientTest do
 
   use Mimic
 
-  alias Milvex.{Connection, Data, Error, Index, RPC, Schema}
+  alias Milvex.Connection
+  alias Milvex.Data
+  alias Milvex.Error
+  alias Milvex.Index
+  alias Milvex.RPC
+  alias Milvex.Schema
   alias Milvex.Schema.Field
 
-  alias Milvex.Milvus.Proto.Common.{KeyValuePair, Status}
-  alias Milvex.Milvus.Proto.Schema.{CollectionSchema, FieldSchema, IDs, LongArray, StringArray}
+  alias Milvex.Milvus.Proto.Common.KeyValuePair
+  alias Milvex.Milvus.Proto.Common.Status
+  alias Milvex.Milvus.Proto.Schema.CollectionSchema
+  alias Milvex.Milvus.Proto.Schema.FieldSchema
+  alias Milvex.Milvus.Proto.Schema.IDs
+  alias Milvex.Milvus.Proto.Schema.LongArray
+  alias Milvex.Milvus.Proto.Schema.StringArray
 
-  alias Milvex.Milvus.Proto.Milvus.{
-    BoolResponse,
-    DescribeCollectionResponse,
-    DescribeIndexResponse,
-    IndexDescription,
-    MutationResult,
-    QueryResults,
-    SearchResults,
-    ShowCollectionsResponse,
-    ShowPartitionsResponse
-  }
+  alias Milvex.Milvus.Proto.Milvus.BoolResponse
+  alias Milvex.Milvus.Proto.Milvus.DescribeCollectionResponse
+  alias Milvex.Milvus.Proto.Milvus.DescribeIndexResponse
+  alias Milvex.Milvus.Proto.Milvus.IndexDescription
+  alias Milvex.Milvus.Proto.Milvus.MutationResult
+  alias Milvex.Milvus.Proto.Milvus.QueryResults
+  alias Milvex.Milvus.Proto.Milvus.SearchResults
+  alias Milvex.Milvus.Proto.Milvus.ShowCollectionsResponse
+  alias Milvex.Milvus.Proto.Milvus.ShowPartitionsResponse
 
   @channel %GRPC.Channel{host: "localhost", port: 19_530}
 

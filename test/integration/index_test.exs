@@ -24,10 +24,11 @@ defmodule Milvex.Integration.IndexTest do
 
       :ok = Milvex.create_collection(conn, name, schema)
 
-      assert :ok = Milvex.create_index(conn, name, "embedding",
-        index_type: "AUTOINDEX",
-        metric_type: "COSINE"
-      )
+      assert :ok =
+               Milvex.create_index(conn, name, "embedding",
+                 index_type: "AUTOINDEX",
+                 metric_type: "COSINE"
+               )
     end
 
     test "creates index with custom name", %{conn: conn} do
@@ -38,8 +39,10 @@ defmodule Milvex.Integration.IndexTest do
 
       :ok = Milvex.create_collection(conn, name, schema)
 
-      index = Index.hnsw("embedding", :cosine)
-             |> Index.name("my_custom_index")
+      index =
+        Index.hnsw("embedding", :cosine)
+        |> Index.name("my_custom_index")
+
       assert :ok = Milvex.create_index(conn, name, index)
 
       {:ok, descriptions} = Milvex.describe_index(conn, name)
@@ -76,13 +79,13 @@ defmodule Milvex.Integration.IndexTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "HNSW", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding", index_type: "HNSW", metric_type: "COSINE")
 
       assert {:ok, descriptions} = Milvex.describe_index(conn, name)
       assert is_list(descriptions)
-      assert length(descriptions) > 0
-
-      description = hd(descriptions)
+      assert [description | _] = descriptions
       assert description.field_name == "embedding"
     end
 
@@ -102,7 +105,12 @@ defmodule Milvex.Integration.IndexTest do
       on_exit(fn -> cleanup_collection(conn, name) end)
 
       :ok = Milvex.create_collection(conn, name, schema)
-      :ok = Milvex.create_index(conn, name, "embedding", index_type: "AUTOINDEX", metric_type: "COSINE")
+
+      :ok =
+        Milvex.create_index(conn, name, "embedding",
+          index_type: "AUTOINDEX",
+          metric_type: "COSINE"
+        )
 
       assert :ok = Milvex.drop_index(conn, name, "embedding")
     end
@@ -128,7 +136,7 @@ defmodule Milvex.Integration.IndexTest do
       assert :ok = Milvex.create_index(conn, name, index)
 
       {:ok, descriptions} = Milvex.describe_index(conn, name)
-      assert length(descriptions) > 0
+      refute Enum.empty?(descriptions)
 
       rows = sample_rows(10, dimension: 32)
       data = Data.from_rows!(rows, schema)

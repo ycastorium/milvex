@@ -1,9 +1,9 @@
 defmodule Milvex.RPCTest do
   use ExUnit.Case, async: true
 
-  alias Milvex.RPC
   alias Milvex.Error
   alias Milvex.Milvus.Proto.Common.Status
+  alias Milvex.RPC
 
   describe "check_status/2" do
     test "returns :ok for success status (code 0)" do

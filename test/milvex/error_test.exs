@@ -2,7 +2,10 @@ defmodule Milvex.ErrorTest do
   use ExUnit.Case, async: true
 
   alias Milvex.Error
-  alias Milvex.Errors.{Invalid, Connection, Grpc, Unknown}
+  alias Milvex.Errors.Connection
+  alias Milvex.Errors.Grpc
+  alias Milvex.Errors.Invalid
+  alias Milvex.Errors.Unknown
 
   describe "Invalid errors" do
     test "creates error with field and message" do

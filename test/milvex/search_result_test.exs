@@ -1,20 +1,18 @@
 defmodule Milvex.SearchResultTest do
   use ExUnit.Case, async: true
 
+  alias Milvex.Milvus.Proto.Milvus.SearchResults
   alias Milvex.SearchResult
   alias Milvex.SearchResult.Hit
-  alias Milvex.Milvus.Proto.Milvus.SearchResults
 
-  alias Milvex.Milvus.Proto.Schema.{
-    FieldData,
-    FloatArray,
-    IDs,
-    LongArray,
-    ScalarField,
-    SearchResultData,
-    StringArray,
-    VectorField
-  }
+  alias Milvex.Milvus.Proto.Schema.FieldData
+  alias Milvex.Milvus.Proto.Schema.FloatArray
+  alias Milvex.Milvus.Proto.Schema.IDs
+  alias Milvex.Milvus.Proto.Schema.LongArray
+  alias Milvex.Milvus.Proto.Schema.ScalarField
+  alias Milvex.Milvus.Proto.Schema.SearchResultData
+  alias Milvex.Milvus.Proto.Schema.StringArray
+  alias Milvex.Milvus.Proto.Schema.VectorField
 
   describe "from_proto/1" do
     test "parses nil results" do
