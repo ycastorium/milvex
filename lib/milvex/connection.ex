@@ -32,25 +32,36 @@ defmodule Milvex.Connection do
 
       # Use the named connection
       {:ok, channel} = Milvex.Connection.get_channel(:milvus)
+
+  ## Reconnection Behavior
+
+  The connection uses exponential backoff with jitter for reconnection attempts.
+  This prevents thundering herd problems when multiple clients reconnect.
+
+  Configuration options:
+  - `:reconnect_base_delay` - Base delay in ms (default: 1000)
+  - `:reconnect_max_delay` - Maximum delay cap in ms (default: 60000)
+  - `:reconnect_multiplier` - Exponential multiplier (default: 2.0)
+  - `:reconnect_jitter` - Jitter factor 0.0-1.0 (default: 0.1)
+  - `:health_check_interval` - Health check interval in ms (default: 30000)
   """
 
   use GenStateMachine, callback_mode: [:state_functions, :state_enter]
 
   require Logger
 
+  alias Milvex.Backoff
   alias Milvex.Config
   alias Milvex.Milvus.Proto.Milvus.CheckHealthRequest
   alias Milvex.Milvus.Proto.Milvus.MilvusService
 
-  @health_check_interval 30_000
-  @reconnect_delay 5_000
-
-  defstruct [:config, :channel, :health_timer]
+  defstruct [:config, :channel, :health_timer, retry_count: 0]
 
   @type t :: %__MODULE__{
           config: Config.t(),
           channel: GRPC.Channel.t() | nil,
-          health_timer: reference() | nil
+          health_timer: reference() | nil,
+          retry_count: non_neg_integer()
         }
 
   @type state :: :connecting | :connected | :reconnecting
@@ -120,7 +131,8 @@ defmodule Milvex.Connection do
         data = %__MODULE__{
           config: config,
           channel: nil,
-          health_timer: nil
+          health_timer: nil,
+          retry_count: 0
         }
 
         {:ok, :connecting, data}
@@ -139,22 +151,31 @@ defmodule Milvex.Connection do
   def connecting(:state_timeout, :connect, data) do
     case establish_connection(data.config) do
       {:ok, channel} ->
-        {:next_state, :connected, %{data | channel: channel}}
+        {:next_state, :connected, %{data | channel: channel, retry_count: 0}}
 
       {:error, reason} ->
-        Logger.warning("Failed to connect to Milvus: #{inspect(reason)}, retrying...")
-        {:keep_state_and_data, [{:state_timeout, @reconnect_delay, :retry}]}
+        delay = calculate_backoff_delay(data)
+
+        Logger.warning(
+          "Failed to connect to Milvus: #{inspect(reason)}, retrying in #{delay}ms..."
+        )
+
+        {:keep_state, %{data | retry_count: data.retry_count + 1},
+         [{:state_timeout, delay, :retry}]}
     end
   end
 
   def connecting(:state_timeout, :retry, data) do
     case establish_connection(data.config) do
       {:ok, channel} ->
-        {:next_state, :connected, %{data | channel: channel}}
+        {:next_state, :connected, %{data | channel: channel, retry_count: 0}}
 
       {:error, reason} ->
-        Logger.warning("Connection retry failed: #{inspect(reason)}, retrying...")
-        {:keep_state_and_data, [{:state_timeout, @reconnect_delay, :retry}]}
+        delay = calculate_backoff_delay(data)
+        Logger.warning("Connection retry failed: #{inspect(reason)}, retrying in #{delay}ms...")
+
+        {:keep_state, %{data | retry_count: data.retry_count + 1},
+         [{:state_timeout, delay, :retry}]}
     end
   end
 
@@ -173,7 +194,7 @@ defmodule Milvex.Connection do
   # --- :connected state ---
 
   def connected(:enter, _old_state, data) do
-    timer = schedule_health_check()
+    timer = schedule_health_check(data.config)
     {:keep_state, %{data | health_timer: timer}}
   end
 
@@ -193,13 +214,13 @@ defmodule Milvex.Connection do
   def connected(:info, :health_check, data) do
     case perform_health_check(data.channel) do
       :ok ->
-        timer = schedule_health_check()
+        timer = schedule_health_check(data.config)
         {:keep_state, %{data | health_timer: timer}}
 
       {:error, _reason} ->
         Logger.warning("Health check failed, reconnecting...")
         close_channel(data.channel)
-        {:next_state, :reconnecting, %{data | channel: nil, health_timer: nil}}
+        {:next_state, :reconnecting, %{data | channel: nil, health_timer: nil, retry_count: 0}}
     end
   end
 
@@ -241,17 +262,30 @@ defmodule Milvex.Connection do
   end
 
   # --- Private helpers ---
-  #
+
   defp reconnect(data) do
     case establish_connection(data.config) do
       {:ok, channel} ->
         Logger.info("Reconnected...")
-        {:next_state, :connected, %{data | channel: channel}}
+        {:next_state, :connected, %{data | channel: channel, retry_count: 0}}
 
       {:error, reason} ->
-        Logger.warning("Reconnection failed: #{inspect(reason)}, retrying...")
-        {:keep_state_and_data, [{:state_timeout, @reconnect_delay, :retry}]}
+        delay = calculate_backoff_delay(data)
+        Logger.warning("Reconnection failed: #{inspect(reason)}, retrying in #{delay}ms...")
+
+        {:keep_state, %{data | retry_count: data.retry_count + 1},
+         [{:state_timeout, delay, :retry}]}
     end
+  end
+
+  defp calculate_backoff_delay(data) do
+    Backoff.calculate(
+      data.retry_count,
+      data.config.reconnect_base_delay,
+      data.config.reconnect_max_delay,
+      data.config.reconnect_multiplier,
+      data.config.reconnect_jitter
+    )
   end
 
   defp not_connected_error(data) do
@@ -358,8 +392,8 @@ defmodule Milvex.Connection do
     _ -> :ok
   end
 
-  defp schedule_health_check do
-    Process.send_after(self(), :health_check, @health_check_interval)
+  defp schedule_health_check(config) do
+    Process.send_after(self(), :health_check, config.health_check_interval)
   end
 end
 

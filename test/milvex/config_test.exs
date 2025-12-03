@@ -163,6 +163,71 @@ defmodule Milvex.ConfigTest do
     end
   end
 
+  describe "parse/1 backoff options" do
+    test "uses defaults for backoff options" do
+      {:ok, config} = Config.parse([])
+
+      assert config.reconnect_base_delay == 1_000
+      assert config.reconnect_max_delay == 60_000
+      assert config.reconnect_multiplier == 2.0
+      assert config.reconnect_jitter == 0.1
+      assert config.health_check_interval == 30_000
+    end
+
+    test "parses custom backoff options" do
+      {:ok, config} =
+        Config.parse(
+          reconnect_base_delay: 500,
+          reconnect_max_delay: 30_000,
+          reconnect_multiplier: 1.5,
+          reconnect_jitter: 0.2,
+          health_check_interval: 15_000
+        )
+
+      assert config.reconnect_base_delay == 500
+      assert config.reconnect_max_delay == 30_000
+      assert config.reconnect_multiplier == 1.5
+      assert config.reconnect_jitter == 0.2
+      assert config.health_check_interval == 15_000
+    end
+
+    test "validates reconnect_base_delay minimum" do
+      {:error, error} = Config.parse(reconnect_base_delay: 50)
+      assert error.message =~ "reconnect_base_delay"
+    end
+
+    test "validates reconnect_base_delay maximum" do
+      {:error, error} = Config.parse(reconnect_base_delay: 100_000)
+      assert error.message =~ "reconnect_base_delay"
+    end
+
+    test "validates reconnect_max_delay minimum" do
+      {:error, error} = Config.parse(reconnect_max_delay: 500)
+      assert error.message =~ "reconnect_max_delay"
+    end
+
+    test "validates reconnect_multiplier range" do
+      {:error, error} = Config.parse(reconnect_multiplier: 0.5)
+      assert error.message =~ "reconnect_multiplier"
+
+      {:error, error} = Config.parse(reconnect_multiplier: 15.0)
+      assert error.message =~ "reconnect_multiplier"
+    end
+
+    test "validates reconnect_jitter range" do
+      {:error, error} = Config.parse(reconnect_jitter: -0.1)
+      assert error.message =~ "reconnect_jitter"
+
+      {:error, error} = Config.parse(reconnect_jitter: 1.5)
+      assert error.message =~ "reconnect_jitter"
+    end
+
+    test "validates health_check_interval minimum" do
+      {:error, error} = Config.parse(health_check_interval: 500)
+      assert error.message =~ "health_check_interval"
+    end
+  end
+
   describe "full configuration scenarios" do
     test "production-like configuration" do
       {:ok, config} =

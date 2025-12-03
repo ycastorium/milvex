@@ -38,7 +38,40 @@ defmodule Milvex.Config do
                      ssl_options:
                        Zoi.any(description: "SSL options passed to the underlying transport")
                        |> Zoi.optional()
-                       |> Zoi.default([])
+                       |> Zoi.default([]),
+                     reconnect_base_delay:
+                       Zoi.integer(
+                         description: "Base delay for reconnection attempts in milliseconds"
+                       )
+                       |> Zoi.min(100)
+                       |> Zoi.max(60_000)
+                       |> Zoi.optional()
+                       |> Zoi.default(1_000),
+                     reconnect_max_delay:
+                       Zoi.integer(
+                         description: "Maximum delay for reconnection attempts in milliseconds"
+                       )
+                       |> Zoi.min(1_000)
+                       |> Zoi.max(300_000)
+                       |> Zoi.optional()
+                       |> Zoi.default(60_000),
+                     reconnect_multiplier:
+                       Zoi.float(description: "Multiplier for exponential backoff")
+                       |> Zoi.min(1.0)
+                       |> Zoi.max(10.0)
+                       |> Zoi.optional()
+                       |> Zoi.default(2.0),
+                     reconnect_jitter:
+                       Zoi.float(description: "Jitter factor (0.0 to 1.0) to randomize delay")
+                       |> Zoi.min(0.0)
+                       |> Zoi.max(1.0)
+                       |> Zoi.optional()
+                       |> Zoi.default(0.1),
+                     health_check_interval:
+                       Zoi.integer(description: "Health check interval in milliseconds")
+                       |> Zoi.min(1_000)
+                       |> Zoi.optional()
+                       |> Zoi.default(30_000)
                    },
                    description: "Configuration options for connecting to a Milvus server",
                    example: %{
