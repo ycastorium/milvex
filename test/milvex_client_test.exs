@@ -29,6 +29,20 @@ defmodule MilvexClientTest do
   alias Milvex.Milvus.Proto.Milvus.ShowCollectionsResponse
   alias Milvex.Milvus.Proto.Milvus.ShowPartitionsResponse
 
+  defmodule TestCollection do
+    use Milvex.Collection
+
+    collection do
+      name "test_movies"
+
+      fields do
+        primary_key :id, :int64, auto_id: true
+        varchar :title, 256
+        vector :embedding, 4
+      end
+    end
+  end
+
   @channel %GRPC.Channel{host: "localhost", port: 19_530}
 
   setup :verify_on_exit!
@@ -867,6 +881,199 @@ defmodule MilvexClientTest do
       end)
 
       assert :ok = Milvex.release_partitions(:conn, "test", ["partition_2024", "partition_2023"])
+    end
+  end
+
+  describe "collection module support" do
+    test "has_collection accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :has_collection, request ->
+        assert request.collection_name == "test_movies"
+        {:ok, %BoolResponse{status: %Status{code: 0}, value: true}}
+      end)
+
+      assert {:ok, true} = Milvex.has_collection(:conn, MilvexClientTest.TestCollection)
+    end
+
+    test "drop_collection accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :drop_collection, request ->
+        assert request.collection_name == "test_movies"
+        {:ok, %Status{code: 0}}
+      end)
+
+      assert :ok = Milvex.drop_collection(:conn, MilvexClientTest.TestCollection)
+    end
+
+    test "load_collection accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :load_collection, request ->
+        assert request.collection_name == "test_movies"
+        {:ok, %Status{code: 0}}
+      end)
+
+      assert :ok = Milvex.load_collection(:conn, MilvexClientTest.TestCollection)
+    end
+
+    test "release_collection accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :release_collection, request ->
+        assert request.collection_name == "test_movies"
+        {:ok, %Status{code: 0}}
+      end)
+
+      assert :ok = Milvex.release_collection(:conn, MilvexClientTest.TestCollection)
+    end
+
+    test "create_index accepts module" do
+      index = Index.hnsw("embedding", :cosine)
+
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :create_index, request ->
+        assert request.collection_name == "test_movies"
+        {:ok, %Status{code: 0}}
+      end)
+
+      assert :ok = Milvex.create_index(:conn, MilvexClientTest.TestCollection, index)
+    end
+
+    test "query accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :query, request ->
+        assert request.collection_name == "test_movies"
+
+        {:ok,
+         %QueryResults{
+           status: %Status{code: 0},
+           fields_data: [],
+           collection_name: "test_movies",
+           output_fields: []
+         }}
+      end)
+
+      assert {:ok, _result} = Milvex.query(:conn, MilvexClientTest.TestCollection, "id > 0")
+    end
+
+    test "delete accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :delete, request ->
+        assert request.collection_name == "test_movies"
+        {:ok, %MutationResult{status: %Status{code: 0}, delete_cnt: 1}}
+      end)
+
+      assert {:ok, _result} = Milvex.delete(:conn, MilvexClientTest.TestCollection, "id == 1")
+    end
+
+    test "create_partition accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :create_partition, request ->
+        assert request.collection_name == "test_movies"
+        assert request.partition_name == "partition_2024"
+        {:ok, %Status{code: 0}}
+      end)
+
+      assert :ok =
+               Milvex.create_partition(:conn, MilvexClientTest.TestCollection, "partition_2024")
+    end
+
+    test "list_partitions accepts module" do
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :show_partitions, request ->
+        assert request.collection_name == "test_movies"
+
+        {:ok,
+         %ShowPartitionsResponse{
+           status: %Status{code: 0},
+           partition_names: ["_default"]
+         }}
+      end)
+
+      assert {:ok, ["_default"]} = Milvex.list_partitions(:conn, MilvexClientTest.TestCollection)
+    end
+  end
+
+  describe "struct insertion support" do
+    test "insert accepts list of Collection structs" do
+      movies = [
+        %MilvexClientTest.TestCollection{title: "Movie 1", embedding: [0.1, 0.2, 0.3, 0.4]},
+        %MilvexClientTest.TestCollection{title: "Movie 2", embedding: [0.5, 0.6, 0.7, 0.8]}
+      ]
+
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :insert, request ->
+        assert request.collection_name == "test_movies"
+        assert request.num_rows == 2
+
+        {:ok,
+         %MutationResult{
+           status: %Status{code: 0},
+           IDs: %IDs{id_field: {:int_id, %LongArray{data: [1, 2]}}},
+           insert_cnt: 2
+         }}
+      end)
+
+      assert {:ok, result} = Milvex.insert(:conn, MilvexClientTest.TestCollection, movies)
+      assert result.insert_count == 2
+      assert result.ids == [1, 2]
+    end
+
+    test "insert with structs does not call describe_collection" do
+      movies = [
+        %MilvexClientTest.TestCollection{title: "Test", embedding: [0.1, 0.2, 0.3, 0.4]}
+      ]
+
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, method, _request ->
+        assert method == :insert, "Expected only :insert call, got #{method}"
+
+        {:ok,
+         %MutationResult{
+           status: %Status{code: 0},
+           IDs: %IDs{id_field: {:int_id, %LongArray{data: [1]}}},
+           insert_cnt: 1
+         }}
+      end)
+
+      assert {:ok, _result} = Milvex.insert(:conn, MilvexClientTest.TestCollection, movies)
+    end
+
+    test "upsert accepts list of Collection structs" do
+      movies = [
+        %MilvexClientTest.TestCollection{id: 1, title: "Updated", embedding: [0.1, 0.2, 0.3, 0.4]}
+      ]
+
+      stub(Connection, :get_channel, fn _conn -> {:ok, @channel} end)
+
+      stub(RPC, :call, fn _channel, _stub, :upsert, request ->
+        assert request.collection_name == "test_movies"
+        assert request.num_rows == 1
+
+        {:ok,
+         %MutationResult{
+           status: %Status{code: 0},
+           IDs: %IDs{id_field: {:int_id, %LongArray{data: [1]}}},
+           upsert_cnt: 1
+         }}
+      end)
+
+      assert {:ok, result} = Milvex.upsert(:conn, MilvexClientTest.TestCollection, movies)
+      assert result.upsert_count == 1
+    end
+
+    test "__collection__/0 function is generated" do
+      assert function_exported?(MilvexClientTest.TestCollection, :__collection__, 0)
+      assert MilvexClientTest.TestCollection.__collection__() == true
     end
   end
 end

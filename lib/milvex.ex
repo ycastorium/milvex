@@ -49,6 +49,11 @@ defmodule Milvex do
   @default_shards_num 1
   @default_top_k 10
 
+  @typedoc """
+  A collection identifier - either a string name or a module using `Milvex.Collection`.
+  """
+  @type collection_ref :: String.t() | module()
+
   @doc """
   Creates a new collection with the given schema.
 
@@ -108,7 +113,7 @@ defmodule Milvex do
   ## Parameters
 
     - `conn` - Connection process
-    - `name` - Collection name to drop
+    - `collection` - Collection name or module using `Milvex.Collection`
     - `opts` - Options
 
   ## Options
@@ -120,12 +125,13 @@ defmodule Milvex do
     - `:ok` on success
     - `{:error, error}` on failure
   """
-  @spec drop_collection(GenServer.server(), String.t(), keyword()) :: :ok | {:error, Error.t()}
-  def drop_collection(conn, name, opts \\ []) do
+  @spec drop_collection(GenServer.server(), collection_ref(), keyword()) ::
+          :ok | {:error, Error.t()}
+  def drop_collection(conn, collection, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %DropCollectionRequest{
         db_name: get_db_name(opts),
-        collection_name: name
+        collection_name: resolve_collection_name(collection)
       }
 
       with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :drop_collection, request) do
@@ -140,7 +146,7 @@ defmodule Milvex do
   ## Parameters
 
     - `conn` - Connection process
-    - `name` - Collection name to check
+    - `collection` - Collection name or module using `Milvex.Collection`
     - `opts` - Options
 
   ## Options
@@ -153,13 +159,13 @@ defmodule Milvex do
     - `{:ok, false}` if collection does not exist
     - `{:error, error}` on failure
   """
-  @spec has_collection(GenServer.server(), String.t(), keyword()) ::
+  @spec has_collection(GenServer.server(), collection_ref(), keyword()) ::
           {:ok, boolean()} | {:error, Error.t()}
-  def has_collection(conn, name, opts \\ []) do
+  def has_collection(conn, collection, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %HasCollectionRequest{
         db_name: get_db_name(opts),
-        collection_name: name
+        collection_name: resolve_collection_name(collection)
       }
 
       with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :has_collection, request),
@@ -175,7 +181,7 @@ defmodule Milvex do
   ## Parameters
 
     - `conn` - Connection process
-    - `name` - Collection name
+    - `collection` - Collection name or module using `Milvex.Collection`
     - `opts` - Options
 
   ## Options
@@ -193,13 +199,13 @@ defmodule Milvex do
       - `:aliases` - List of aliases
     - `{:error, error}` on failure
   """
-  @spec describe_collection(GenServer.server(), String.t(), keyword()) ::
+  @spec describe_collection(GenServer.server(), collection_ref(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
-  def describe_collection(conn, name, opts \\ []) do
+  def describe_collection(conn, collection, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %DescribeCollectionRequest{
         db_name: get_db_name(opts),
-        collection_name: name
+        collection_name: resolve_collection_name(collection)
       }
 
       with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :describe_collection, request),
@@ -255,7 +261,7 @@ defmodule Milvex do
   ## Parameters
 
     - `conn` - Connection process
-    - `name` - Collection name
+    - `collection` - Collection name or module using `Milvex.Collection`
     - `opts` - Options
 
   ## Options
@@ -268,12 +274,13 @@ defmodule Milvex do
     - `:ok` on success
     - `{:error, error}` on failure
   """
-  @spec load_collection(GenServer.server(), String.t(), keyword()) :: :ok | {:error, Error.t()}
-  def load_collection(conn, name, opts \\ []) do
+  @spec load_collection(GenServer.server(), collection_ref(), keyword()) ::
+          :ok | {:error, Error.t()}
+  def load_collection(conn, collection, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %LoadCollectionRequest{
         db_name: get_db_name(opts),
-        collection_name: name,
+        collection_name: resolve_collection_name(collection),
         replica_number: Keyword.get(opts, :replica_number, 1)
       }
 
@@ -289,7 +296,7 @@ defmodule Milvex do
   ## Parameters
 
     - `conn` - Connection process
-    - `name` - Collection name
+    - `collection` - Collection name or module using `Milvex.Collection`
     - `opts` - Options
 
   ## Options
@@ -301,12 +308,13 @@ defmodule Milvex do
     - `:ok` on success
     - `{:error, error}` on failure
   """
-  @spec release_collection(GenServer.server(), String.t(), keyword()) :: :ok | {:error, Error.t()}
-  def release_collection(conn, name, opts \\ []) do
+  @spec release_collection(GenServer.server(), collection_ref(), keyword()) ::
+          :ok | {:error, Error.t()}
+  def release_collection(conn, collection, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %ReleaseCollectionRequest{
         db_name: get_db_name(opts),
-        collection_name: name
+        collection_name: resolve_collection_name(collection)
       }
 
       with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :release_collection, request) do
@@ -354,7 +362,7 @@ defmodule Milvex do
         metric_type: "COSINE"
       )
   """
-  @spec create_index(GenServer.server(), String.t(), Index.t() | String.t(), keyword()) ::
+  @spec create_index(GenServer.server(), collection_ref(), Index.t() | String.t(), keyword()) ::
           :ok | {:error, Error.t()}
   def create_index(conn, collection, index_or_field, opts \\ [])
 
@@ -363,7 +371,7 @@ defmodule Milvex do
          {:ok, channel} <- Connection.get_channel(conn) do
       request = %CreateIndexRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         field_name: index.field_name,
         index_name: index.name || "",
         extra_params: Index.to_extra_params(index)
@@ -381,7 +389,7 @@ defmodule Milvex do
 
       request = %CreateIndexRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         field_name: field_name,
         index_name: Keyword.get(opts, :index_name, ""),
         extra_params: extra_params
@@ -418,13 +426,13 @@ defmodule Milvex do
       :ok = Milvex.drop_index(conn, "movies", "embedding")
       :ok = Milvex.drop_index(conn, "movies", "embedding", index_name: "my_hnsw_index")
   """
-  @spec drop_index(GenServer.server(), String.t(), String.t(), keyword()) ::
+  @spec drop_index(GenServer.server(), collection_ref(), String.t(), keyword()) ::
           :ok | {:error, Error.t()}
   def drop_index(conn, collection, field_name, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %DropIndexRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         field_name: field_name,
         index_name: Keyword.get(opts, :index_name, "")
       }
@@ -455,13 +463,13 @@ defmodule Milvex do
     - `{:ok, index_descriptions}` on success
     - `{:error, error}` on failure
   """
-  @spec describe_index(GenServer.server(), String.t(), keyword()) ::
+  @spec describe_index(GenServer.server(), collection_ref(), keyword()) ::
           {:ok, list()} | {:error, Error.t()}
   def describe_index(conn, collection, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %DescribeIndexRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         field_name: Keyword.get(opts, :field_name, ""),
         index_name: Keyword.get(opts, :index_name, "")
       }
@@ -537,14 +545,16 @@ defmodule Milvex do
       {:ok, data} = Data.from_rows(rows, schema)
       {:ok, result} = Milvex.insert(conn, "movies", data)
   """
-  @spec insert(GenServer.server(), String.t(), Data.t() | [map()], keyword()) ::
+  @spec insert(GenServer.server(), collection_ref(), Data.t() | [map() | struct()], keyword()) ::
           {:ok, %{insert_count: integer(), ids: list()}} | {:error, Error.t()}
   def insert(conn, collection, data, opts \\ []) do
+    collection_name = resolve_collection_name(collection)
+
     with {:ok, channel} <- Connection.get_channel(conn),
-         {:ok, prepared_data} <- ensure_data(data, collection, conn) do
+         {:ok, prepared_data} <- ensure_data(data, collection_name, conn) do
       request = %InsertRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: collection_name,
         partition_name: Keyword.get(opts, :partition_name, ""),
         fields_data: Data.to_proto(prepared_data),
         num_rows: Data.num_rows(prepared_data)
@@ -586,13 +596,13 @@ defmodule Milvex do
 
       {:ok, result} = Milvex.delete(conn, "movies", "id in [1, 2, 3]")
   """
-  @spec delete(GenServer.server(), String.t(), String.t(), keyword()) ::
+  @spec delete(GenServer.server(), collection_ref(), String.t(), keyword()) ::
           {:ok, %{delete_count: integer()}} | {:error, Error.t()}
   def delete(conn, collection, expr, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %DeleteRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         partition_name: Keyword.get(opts, :partition_name, ""),
         expr: expr,
         consistency_level: get_consistency_level(opts)
@@ -627,14 +637,16 @@ defmodule Milvex do
     - `{:ok, %{upsert_count: count, ids: ids}}` on success
     - `{:error, error}` on failure
   """
-  @spec upsert(GenServer.server(), String.t(), Data.t() | [map()], keyword()) ::
+  @spec upsert(GenServer.server(), collection_ref(), Data.t() | [map() | struct()], keyword()) ::
           {:ok, %{upsert_count: integer(), ids: list()}} | {:error, Error.t()}
   def upsert(conn, collection, data, opts \\ []) do
+    collection_name = resolve_collection_name(collection)
+
     with {:ok, channel} <- Connection.get_channel(conn),
-         {:ok, prepared_data} <- ensure_data(data, collection, conn) do
+         {:ok, prepared_data} <- ensure_data(data, collection_name, conn) do
       request = %UpsertRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: collection_name,
         partition_name: Keyword.get(opts, :partition_name, ""),
         fields_data: Data.to_proto(prepared_data),
         num_rows: Data.num_rows(prepared_data)
@@ -682,13 +694,13 @@ defmodule Milvex do
         limit: 100
       )
   """
-  @spec query(GenServer.server(), String.t(), String.t(), keyword()) ::
+  @spec query(GenServer.server(), collection_ref(), String.t(), keyword()) ::
           {:ok, QueryResult.t()} | {:error, Error.t()}
   def query(conn, collection, expr, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %QueryRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         expr: expr,
         output_fields: Keyword.get(opts, :output_fields, []),
         partition_names: Keyword.get(opts, :partition_names, []),
@@ -745,17 +757,19 @@ defmodule Milvex do
         filter: "year > 2020"
       )
   """
-  @spec search(GenServer.server(), String.t(), [[number()]], keyword()) ::
+  @spec search(GenServer.server(), collection_ref(), [[number()]], keyword()) ::
           {:ok, SearchResult.t()} | {:error, Error.t()}
   def search(conn, collection, vectors, opts \\ []) do
+    collection_name = resolve_collection_name(collection)
+
     with {:ok, vector_field} <- require_option(opts, :vector_field),
          {:ok, channel} <- Connection.get_channel(conn),
-         {:ok, info} <- describe_collection(conn, collection, opts),
+         {:ok, info} <- describe_collection(conn, collection_name, opts),
          {:ok, field} <- find_vector_field(info.schema, vector_field),
          {:ok, placeholder_bytes} <- build_placeholder_group(vectors, field) do
       request = %SearchRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: collection_name,
         partition_names: Keyword.get(opts, :partition_names, []),
         dsl: Keyword.get(opts, :filter, ""),
         dsl_type: :BoolExprV1,
@@ -800,13 +814,13 @@ defmodule Milvex do
 
       :ok = Milvex.create_partition(conn, "movies", "movies_2024")
   """
-  @spec create_partition(GenServer.server(), String.t(), String.t(), keyword()) ::
+  @spec create_partition(GenServer.server(), collection_ref(), String.t(), keyword()) ::
           :ok | {:error, Error.t()}
   def create_partition(conn, collection, partition_name, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %CreatePartitionRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         partition_name: partition_name
       }
 
@@ -839,13 +853,13 @@ defmodule Milvex do
 
       :ok = Milvex.drop_partition(conn, "movies", "movies_2024")
   """
-  @spec drop_partition(GenServer.server(), String.t(), String.t(), keyword()) ::
+  @spec drop_partition(GenServer.server(), collection_ref(), String.t(), keyword()) ::
           :ok | {:error, Error.t()}
   def drop_partition(conn, collection, partition_name, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %DropPartitionRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         partition_name: partition_name
       }
 
@@ -879,13 +893,13 @@ defmodule Milvex do
 
       {:ok, true} = Milvex.has_partition(conn, "movies", "movies_2024")
   """
-  @spec has_partition(GenServer.server(), String.t(), String.t(), keyword()) ::
+  @spec has_partition(GenServer.server(), collection_ref(), String.t(), keyword()) ::
           {:ok, boolean()} | {:error, Error.t()}
   def has_partition(conn, collection, partition_name, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %HasPartitionRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         partition_name: partition_name
       }
 
@@ -918,13 +932,13 @@ defmodule Milvex do
 
       {:ok, ["_default", "movies_2024"]} = Milvex.list_partitions(conn, "movies")
   """
-  @spec list_partitions(GenServer.server(), String.t(), keyword()) ::
+  @spec list_partitions(GenServer.server(), collection_ref(), keyword()) ::
           {:ok, [String.t()]} | {:error, Error.t()}
   def list_partitions(conn, collection, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %ShowPartitionsRequest{
         db_name: get_db_name(opts),
-        collection_name: collection
+        collection_name: resolve_collection_name(collection)
       }
 
       with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :show_partitions, request),
@@ -958,13 +972,13 @@ defmodule Milvex do
 
       :ok = Milvex.load_partitions(conn, "movies", ["movies_2024", "movies_2023"])
   """
-  @spec load_partitions(GenServer.server(), String.t(), [String.t()], keyword()) ::
+  @spec load_partitions(GenServer.server(), collection_ref(), [String.t()], keyword()) ::
           :ok | {:error, Error.t()}
   def load_partitions(conn, collection, partition_names, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %LoadPartitionsRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         partition_names: partition_names,
         replica_number: Keyword.get(opts, :replica_number, 1)
       }
@@ -998,13 +1012,13 @@ defmodule Milvex do
 
       :ok = Milvex.release_partitions(conn, "movies", ["movies_2024"])
   """
-  @spec release_partitions(GenServer.server(), String.t(), [String.t()], keyword()) ::
+  @spec release_partitions(GenServer.server(), collection_ref(), [String.t()], keyword()) ::
           :ok | {:error, Error.t()}
   def release_partitions(conn, collection, partition_names, opts \\ []) do
     with {:ok, channel} <- Connection.get_channel(conn) do
       request = %ReleasePartitionsRequest{
         db_name: get_db_name(opts),
-        collection_name: collection,
+        collection_name: resolve_collection_name(collection),
         partition_names: partition_names
       }
 
@@ -1017,6 +1031,12 @@ defmodule Milvex do
   # ============================================================================
   # Private Helpers
   # ============================================================================
+
+  defp resolve_collection_name(name) when is_binary(name), do: name
+
+  defp resolve_collection_name(module) when is_atom(module) do
+    Milvex.Collection.collection_name(module)
+  end
 
   defp get_db_name(opts), do: Keyword.get(opts, :db_name, "")
 
@@ -1034,10 +1054,32 @@ defmodule Milvex do
   defp ensure_data(%Data{} = data, _collection, _conn), do: {:ok, data}
 
   defp ensure_data(rows, collection, conn) when is_list(rows) do
-    with {:ok, info} <- describe_collection(conn, collection) do
-      Data.from_rows(rows, info.schema)
+    case detect_row_type(rows) do
+      {:collection_struct, module} ->
+        schema = Milvex.Collection.to_schema(module)
+        maps = Enum.map(rows, &struct_to_map/1)
+        Data.from_rows(maps, schema)
+
+      :map ->
+        with {:ok, info} <- describe_collection(conn, collection) do
+          Data.from_rows(rows, info.schema)
+        end
     end
   end
+
+  defp detect_row_type([]), do: :map
+
+  defp detect_row_type([%{__struct__: module} | _]) when is_atom(module) do
+    if function_exported?(module, :__collection__, 0) do
+      {:collection_struct, module}
+    else
+      :map
+    end
+  end
+
+  defp detect_row_type(_), do: :map
+
+  defp struct_to_map(%{__struct__: _} = struct), do: Map.from_struct(struct)
 
   defp extract_ids(nil), do: []
   defp extract_ids(%IDs{id_field: {:int_id, %LongArray{data: ids}}}), do: ids

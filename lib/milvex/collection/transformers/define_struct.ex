@@ -51,6 +51,9 @@ defmodule Milvex.Collection.Transformers.DefineStruct do
           @type t :: unquote(type_ast)
 
           defstruct unquote(field_names)
+
+          @doc false
+          def __collection__, do: true
         end
       )
 
