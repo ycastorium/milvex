@@ -24,9 +24,63 @@ defmodule Milvex.MixProject do
       docs: [
         main: "readme",
         extras: [
-          "CHANGELOG.md": [title: "Changelog"],
           "README.md": [title: "Introduction"],
+          "guides/getting-started.md": [title: "Getting Started"],
+          "guides/architecture.md": [title: "Architecture"],
+          "guides/error-handling.md": [title: "Error Handling"],
+          "CHANGELOG.md": [title: "Changelog"],
           LICENSE: [title: "License"]
+        ],
+        groups_for_extras: [
+          Guides: [
+            "guides/getting-started.md",
+            "guides/architecture.md",
+            "guides/error-handling.md"
+          ],
+          About: [
+            "README.md",
+            "CHANGELOG.md",
+            "LICENSE"
+          ]
+        ],
+        groups_for_modules: [
+          "Client API": [
+            Milvex,
+            Milvex.Connection
+          ],
+          "Data Builders": [
+            Milvex.Schema,
+            Milvex.Schema.Field,
+            Milvex.Data,
+            Milvex.Data.FieldData,
+            Milvex.Index
+          ],
+          Results: [
+            Milvex.SearchResult,
+            Milvex.QueryResult
+          ],
+          Errors: [
+            Milvex.Error,
+            Milvex.Errors.Connection,
+            Milvex.Errors.Grpc,
+            Milvex.Errors.Invalid,
+            Milvex.Errors.Unknown
+          ],
+          Configuration: [
+            Milvex.Config,
+            Milvex.Backoff,
+            Milvex.Application
+          ],
+          Internal: [
+            Milvex.RPC
+          ],
+          "Generated Proto": ~r/Milvex\.Milvus\.Proto\./
+        ],
+        nest_modules_by_prefix: [
+          Milvex.Schema,
+          Milvex.Data,
+          Milvex.Errors,
+          Milvex.Milvus.Proto
         ]
       ],
       deps: deps(),
