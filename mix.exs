@@ -117,6 +117,7 @@ defmodule Milvex.MixProject do
       {:nx, "~> 0.10", optional: true},
       {:protobuf, "~> 0.15.0"},
       {:recode, "~> 0.8.0", only: [:dev], runtime: false},
+      {:spark, "~> 2.3"},
       {:splode, "~> 0.2.9"},
       {:testcontainers, "~> 1.13", only: [:test, :dev]},
       {:zoi, "~> 0.11"}
