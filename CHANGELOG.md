@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/ycastorium/milvex/compare/v0.2.0...v0.3.0) (2025-12-08)
+
+
+### Features
+
+* Adds simple migration and prefix to collections ([d313a75](https://github.com/ycastorium/milvex/commit/d313a758cc7343bbb341e58835f81206bd2d92a9))
+
+
+### Bug Fixes
+
+* Fixed credo warning ([a496c1b](https://github.com/ycastorium/milvex/commit/a496c1b4e6f58d87f1e067c6eb631a9ad4532cb8))
+
 ## [0.2.0](https://github.com/ycastorium/milvex/compare/v0.1.0...v0.2.0) (2025-12-04)
 
 
