@@ -35,8 +35,7 @@ defmodule Milvex.Integration.MigrationTest do
       index = Index.hnsw("embedding", :cosine, m: 8, ef_construction: 64)
       assert :ok = Milvex.create_index(conn, name, index)
 
-      {:ok, descriptions} = Milvex.describe_index(conn, name)
-      assert length(descriptions) > 0
+      {:ok, [_ | _] = descriptions} = Milvex.describe_index(conn, name)
       assert Enum.any?(descriptions, &(&1.field_name == "embedding"))
     end
   end
@@ -73,8 +72,7 @@ defmodule Milvex.Integration.MigrationTest do
       assert :ok = Milvex.create_index(conn, name, index)
 
       # Index already exists - describe should show it
-      {:ok, descriptions} = Milvex.describe_index(conn, name)
-      assert length(descriptions) == 1
+      {:ok, [_]} = Milvex.describe_index(conn, name)
     end
   end
 
