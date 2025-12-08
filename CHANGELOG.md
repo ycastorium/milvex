@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/ycastorium/milvex/compare/v0.3.0...v0.3.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* Fixed index creation ([b68e7a5](https://github.com/ycastorium/milvex/commit/b68e7a584f76cbe761f0028ff7ce58510cc7340a))
+
 ## [0.3.0](https://github.com/ycastorium/milvex/compare/v0.2.0...v0.3.0) (2025-12-08)
 
 
