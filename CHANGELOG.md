@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ycastorium/milvex/compare/v0.3.1...v0.4.0) (2025-12-12)
+
+
+### Features
+
+* Added support to keyed searches ([20b1147](https://github.com/ycastorium/milvex/commit/20b1147071588b4b32100041e2d35ab493ffabe9))
+
 ## [0.3.1](https://github.com/ycastorium/milvex/compare/v0.3.0...v0.3.1) (2025-12-08)
 
 
