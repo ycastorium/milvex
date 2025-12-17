@@ -159,8 +159,7 @@ defmodule Milvex.MixProject do
   defp package() do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/ycastorium/milvex.git"},
-      sponsor: "ycastor.eth"
+      links: %{"GitHub" => "https://github.com/grain-team/milvex.git"}
     ]
   end
 end
