@@ -448,3 +448,23 @@ defimpl Inspect, for: Milvex.Connection do
 
   defp redact_headers(headers), do: headers
 end
+
+defimpl Inspect, for: GRPC.Channel do
+  import Inspect.Algebra
+
+  @redacted_headers ["authorization"]
+
+  def inspect(%GRPC.Channel{} = channel, opts) do
+    redacted = %{channel | headers: redact_headers(channel.headers)}
+    concat(["#GRPC.Channel<", to_doc(Map.from_struct(redacted), opts), ">"])
+  end
+
+  defp redact_headers(headers) when is_list(headers) do
+    Enum.map(headers, fn
+      {key, _value} when key in @redacted_headers -> {key, "[REDACTED]"}
+      header -> header
+    end)
+  end
+
+  defp redact_headers(headers), do: headers
+end
