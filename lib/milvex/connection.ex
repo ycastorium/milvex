@@ -389,11 +389,19 @@ defmodule Milvex.Connection do
     end
   end
 
-  defp close_channel(channel) do
-    GRPC.Stub.disconnect(channel)
-  rescue
-    _ -> :ok
+  defp close_channel(%{adapter_payload: %{conn_pid: conn_pid}} = channel)
+       when is_pid(conn_pid) do
+    if Process.alive?(conn_pid) do
+      GRPC.Stub.disconnect(channel)
+    else
+      {:ok, channel}
+    end
+  catch
+    :exit, _ -> {:ok, channel}
+    :error, _ -> {:ok, channel}
   end
+
+  defp close_channel(channel), do: {:ok, channel}
 
   defp schedule_health_check(config) do
     Process.send_after(self(), :health_check, config.health_check_interval)
