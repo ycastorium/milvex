@@ -334,7 +334,7 @@ defmodule Milvex.Config do
     [
       verify: :verify_peer,
       depth: 99,
-      cacert_file: CAStore.file_path()
+      cacertfile: CAStore.file_path()
     ]
   end
 end
