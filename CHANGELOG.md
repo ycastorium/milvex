@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3](https://github.com/grain-team/milvex/compare/v0.4.2...v0.4.3) (2025-12-19)
+
+
+### Bug Fixes
+
+* Fixed multi-vector mapping ([f412281](https://github.com/grain-team/milvex/commit/f41228138407dcf2620b5b5129b2ed2183e4d7f4))
+* Parsing fector array correctly ([0d0e663](https://github.com/grain-team/milvex/commit/0d0e66351c17c38a5db97174f7ea5e65debf0ce4))
+
 ## [0.4.2](https://github.com/grain-team/milvex/compare/v0.4.0...v0.4.2) (2025-12-19)
 
 
