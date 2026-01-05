@@ -174,7 +174,8 @@ defmodule Milvex.Collection.Dsl do
     examples: [
       "varchar :title, 256",
       "varchar :description, 1024, nullable: true",
-      "varchar :category, 64, default: \"uncategorized\""
+      "varchar :category, 64, default: \"uncategorized\"",
+      "varchar :content, 1000, enable_analyzer: true"
     ],
     target: Milvex.Collection.Dsl.Field,
     args: [:name, :max_length],
@@ -212,6 +213,11 @@ defmodule Milvex.Collection.Dsl do
         type: :boolean,
         default: false,
         doc: "Mark this field as a clustering key"
+      ],
+      enable_analyzer: [
+        type: :boolean,
+        default: false,
+        doc: "Enable text analyzer for full-text search. Used with BM25 functions."
       ],
       description: [
         type: :string,
@@ -351,6 +357,56 @@ defmodule Milvex.Collection.Dsl do
     ]
   }
 
+  @bm25 %Spark.Dsl.Entity{
+    name: :bm25,
+    describe: """
+    Declares a BM25 function for full-text search.
+
+    BM25 functions convert text fields to sparse vector embeddings for full-text search.
+    The input field(s) must have `enable_analyzer: true` set.
+    """,
+    examples: [
+      "bm25 :text_bm25, input: :text, output: :text_sparse",
+      "bm25 :multi_bm25, input: [:title, :content], output: :sparse_emb"
+    ],
+    target: Milvex.Collection.Dsl.BM25Function,
+    args: [:name],
+    schema: [
+      name: [
+        type: :atom,
+        required: true,
+        doc: "The name of the BM25 function"
+      ],
+      input: [
+        type: {:or, [:atom, {:list, :atom}]},
+        required: true,
+        doc: "Input field name(s). Can be a single atom or list of atoms."
+      ],
+      output: [
+        type: :atom,
+        required: true,
+        doc: "Output sparse vector field name"
+      ]
+    ]
+  }
+
+  @functions %Spark.Dsl.Section{
+    name: :functions,
+    describe: """
+    Section for declaring functions on the collection.
+
+    Functions define transformations on fields, such as BM25 for full-text search.
+    """,
+    examples: [
+      """
+      functions do
+        bm25 :text_bm25, input: :text, output: :text_sparse
+      end
+      """
+    ],
+    entities: [@bm25]
+  }
+
   @collection %Spark.Dsl.Section{
     name: :collection,
     describe: """
@@ -393,7 +449,7 @@ defmodule Milvex.Collection.Dsl do
           "Optional prefix for the collection name. Can be a string or a 0-arity function returning a string."
       ]
     ],
-    sections: [@fields]
+    sections: [@fields, @functions]
   }
 
   use Spark.Dsl.Extension,

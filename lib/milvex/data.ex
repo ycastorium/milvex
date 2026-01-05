@@ -171,9 +171,11 @@ defmodule Milvex.Data do
   end
 
   defp transpose_rows_to_columns(rows, schema) do
+    function_output_fields = get_function_output_fields(schema)
+
     field_names =
       schema.fields
-      |> Enum.filter(fn f -> not f.auto_id end)
+      |> Enum.filter(fn f -> not f.auto_id and f.name not in function_output_fields end)
       |> Enum.map(& &1.name)
 
     field_names_set = MapSet.new(field_names)
@@ -340,11 +342,19 @@ defmodule Milvex.Data do
   end
 
   defp get_required_field_names(schema) do
+    function_output_fields = get_function_output_fields(schema)
+
     schema.fields
     |> Enum.filter(fn field ->
-      not field.auto_id and not field.nullable
+      not field.auto_id and not field.nullable and field.name not in function_output_fields
     end)
     |> Enum.map(& &1.name)
+    |> MapSet.new()
+  end
+
+  defp get_function_output_fields(schema) do
+    schema.functions
+    |> Enum.flat_map(& &1.output_field_names)
     |> MapSet.new()
   end
 

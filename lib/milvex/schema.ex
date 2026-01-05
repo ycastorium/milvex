@@ -34,6 +34,7 @@ defmodule Milvex.Schema do
       )
   """
 
+  alias Milvex.Function
   alias Milvex.Milvus.Proto.Schema.CollectionSchema
   alias Milvex.Schema.Field
 
@@ -41,6 +42,7 @@ defmodule Milvex.Schema do
           name: String.t(),
           description: String.t() | nil,
           fields: [Field.t()],
+          functions: [Function.t()],
           enable_dynamic_field: boolean()
         }
 
@@ -48,6 +50,7 @@ defmodule Milvex.Schema do
     :name,
     :description,
     fields: [],
+    functions: [],
     enable_dynamic_field: false
   ]
 
@@ -105,6 +108,19 @@ defmodule Milvex.Schema do
   @spec add_fields(t(), [Field.t()]) :: t()
   def add_fields(%__MODULE__{} = schema, fields) when is_list(fields) do
     Enum.reduce(fields, schema, &add_field(&2, &1))
+  end
+
+  @doc """
+  Adds a function to the schema.
+
+  ## Examples
+
+      schema
+      |> Schema.add_function(Function.bm25("bm25_fn", input: "content", output: "sparse"))
+  """
+  @spec add_function(t(), Function.t()) :: t()
+  def add_function(%__MODULE__{} = schema, %Function{} = function) do
+    %{schema | functions: schema.functions ++ [function]}
   end
 
   @doc """
@@ -191,7 +207,8 @@ defmodule Milvex.Schema do
          :ok <- validate_has_fields(schema),
          :ok <- validate_primary_key(schema),
          :ok <- validate_unique_field_names(schema),
-         :ok <- validate_all_fields(schema) do
+         :ok <- validate_all_fields(schema),
+         :ok <- validate_functions(schema) do
       {:ok, schema}
     end
   end
@@ -268,6 +285,66 @@ defmodule Milvex.Schema do
     end)
   end
 
+  defp validate_functions(%{functions: [], fields: _}), do: :ok
+
+  defp validate_functions(%{functions: functions, fields: fields}) do
+    field_map = Map.new(fields, &{&1.name, &1})
+
+    Enum.reduce_while(functions, :ok, fn func, :ok ->
+      with :ok <- validate_function_inputs(func, field_map),
+           :ok <- validate_function_outputs(func, field_map) do
+        {:cont, :ok}
+      else
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp validate_function_inputs(func, field_map) do
+    missing_or_invalid =
+      func.input_field_names
+      |> Enum.filter(fn name ->
+        case Map.get(field_map, name) do
+          nil -> true
+          field -> func.type == :BM25 and not field.enable_analyzer
+        end
+      end)
+
+    if Enum.empty?(missing_or_invalid) do
+      :ok
+    else
+      if func.type == :BM25 do
+        {:error,
+         invalid_error(
+           :functions,
+           "function '#{func.name}' input fields #{inspect(missing_or_invalid)} must exist and have enable_analyzer: true"
+         )}
+      else
+        {:error,
+         invalid_error(
+           :functions,
+           "function '#{func.name}' references missing input fields: #{inspect(missing_or_invalid)}"
+         )}
+      end
+    end
+  end
+
+  defp validate_function_outputs(func, field_map) do
+    missing =
+      func.output_field_names
+      |> Enum.filter(fn name -> not Map.has_key?(field_map, name) end)
+
+    if Enum.empty?(missing) do
+      :ok
+    else
+      {:error,
+       invalid_error(
+         :functions,
+         "function '#{func.name}' references missing output fields: #{inspect(missing)}"
+       )}
+    end
+  end
+
   defp invalid_error(field, message) do
     Milvex.Errors.Invalid.exception(field: field, message: message)
   end
@@ -288,7 +365,8 @@ defmodule Milvex.Schema do
       description: schema.description || "",
       fields: Enum.map(regular_fields, &Field.to_proto/1),
       struct_array_fields: Enum.map(struct_array_fields, &Field.to_struct_array_field_schema/1),
-      enable_dynamic_field: schema.enable_dynamic_field
+      enable_dynamic_field: schema.enable_dynamic_field,
+      functions: Enum.map(schema.functions, &Function.to_proto/1)
     }
   end
 
@@ -308,10 +386,15 @@ defmodule Milvex.Schema do
       (proto.struct_array_fields || [])
       |> Enum.map(&Field.from_struct_array_field_schema/1)
 
+    functions =
+      (proto.functions || [])
+      |> Enum.map(&Function.from_proto/1)
+
     %__MODULE__{
       name: proto.name,
       description: if(proto.description == "", do: nil, else: proto.description),
       fields: regular_fields ++ struct_array_fields,
+      functions: functions,
       enable_dynamic_field: proto.enable_dynamic_field
     }
   end

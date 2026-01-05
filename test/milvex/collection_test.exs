@@ -74,6 +74,43 @@ defmodule Milvex.CollectionTest do
     end
   end
 
+  defmodule BM25Collection do
+    use Milvex.Collection
+
+    collection do
+      name "bm25_collection"
+
+      fields do
+        primary_key :id, :int64, auto_id: true
+        varchar :text, 1000, enable_analyzer: true
+        sparse_vector :text_sparse
+      end
+
+      functions do
+        bm25 :text_bm25, input: :text, output: :text_sparse
+      end
+    end
+  end
+
+  defmodule MultiBM25Collection do
+    use Milvex.Collection
+
+    collection do
+      name "multi_bm25_collection"
+
+      fields do
+        primary_key :id, :int64, auto_id: true
+        varchar :title, 256, enable_analyzer: true
+        varchar :content, 2000, enable_analyzer: true
+        sparse_vector :sparse_emb
+      end
+
+      functions do
+        bm25 :multi_bm25, input: [:title, :content], output: :sparse_emb
+      end
+    end
+  end
+
   describe "basic collection definition" do
     test "extracts collection name" do
       assert Collection.collection_name(BasicCollection) == "test_collection"
@@ -390,6 +427,85 @@ defmodule Milvex.CollectionTest do
 
       assert record.id == 1
       assert length(record.sentences) == 1
+    end
+  end
+
+  describe "functions section" do
+    test "DSL collection with functions section works" do
+      assert Collection.collection_name(BM25Collection) == "bm25_collection"
+    end
+
+    test "functions/1 returns function definitions" do
+      funcs = Collection.functions(BM25Collection)
+      assert length(funcs) == 1
+
+      func = hd(funcs)
+      assert func.name == :text_bm25
+      assert func.input == :text
+      assert func.output == :text_sparse
+    end
+
+    test "functions/1 returns multiple input fields" do
+      funcs = Collection.functions(MultiBM25Collection)
+      assert length(funcs) == 1
+
+      func = hd(funcs)
+      assert func.name == :multi_bm25
+      assert func.input == [:title, :content]
+      assert func.output == :sparse_emb
+    end
+
+    test "functions/1 returns empty list when no functions defined" do
+      funcs = Collection.functions(BasicCollection)
+      assert funcs == []
+    end
+  end
+
+  describe "enable_analyzer field option" do
+    test "varchar field with enable_analyzer" do
+      fields = Collection.fields(BM25Collection)
+      text_field = Enum.find(fields, &(&1.name == :text))
+
+      assert text_field.enable_analyzer == true
+    end
+
+    test "varchar field without enable_analyzer defaults to false" do
+      fields = Collection.fields(BasicCollection)
+      title_field = Enum.find(fields, &(&1.name == :title))
+
+      assert title_field.enable_analyzer == false
+    end
+  end
+
+  describe "to_schema/1 with functions" do
+    test "includes functions in schema" do
+      schema = Collection.to_schema(BM25Collection)
+
+      assert length(schema.functions) == 1
+      func = hd(schema.functions)
+
+      assert func.name == "text_bm25"
+      assert func.type == :BM25
+      assert func.input_field_names == ["text"]
+      assert func.output_field_names == ["text_sparse"]
+    end
+
+    test "includes enable_analyzer in schema fields" do
+      schema = Collection.to_schema(BM25Collection)
+      text_field = Enum.find(schema.fields, &(&1.name == "text"))
+
+      assert text_field.enable_analyzer == true
+    end
+
+    test "converts multiple input fields correctly" do
+      schema = Collection.to_schema(MultiBM25Collection)
+
+      assert length(schema.functions) == 1
+      func = hd(schema.functions)
+
+      assert func.name == "multi_bm25"
+      assert func.input_field_names == ["title", "content"]
+      assert func.output_field_names == ["sparse_emb"]
     end
   end
 end

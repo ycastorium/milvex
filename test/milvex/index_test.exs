@@ -275,7 +275,8 @@ defmodule Milvex.IndexTest do
         hamming: "HAMMING",
         jaccard: "JACCARD",
         max_sim_cosine: "MAX_SIM_COSINE",
-        max_sim_ip: "MAX_SIM_IP"
+        max_sim_ip: "MAX_SIM_IP",
+        bm25: "BM25"
       ]
 
       for {atom, string} <- metrics do
@@ -299,7 +300,8 @@ defmodule Milvex.IndexTest do
         diskann: "DISKANN",
         gpu_ivf_flat: "GPU_IVF_FLAT",
         gpu_ivf_pq: "GPU_IVF_PQ",
-        scann: "SCANN"
+        scann: "SCANN",
+        sparse_inverted_index: "SPARSE_INVERTED_INDEX"
       ]
 
       for {atom, string} <- types do
@@ -344,6 +346,124 @@ defmodule Milvex.IndexTest do
     test "supports max_sim_ip for array of struct" do
       index = Index.hnsw("sentences[embedding]", :max_sim_ip)
       assert index.metric_type == :max_sim_ip
+    end
+  end
+
+  describe "sparse_bm25/2" do
+    test "creates a SPARSE_INVERTED_INDEX with correct type and metric" do
+      index = Index.sparse_bm25("text_sparse")
+      assert index.index_type == :sparse_inverted_index
+      assert index.metric_type == :bm25
+      assert index.field_name == "text_sparse"
+    end
+
+    test "uses default parameters" do
+      index = Index.sparse_bm25("text_sparse")
+      assert index.params.bm25_k1 == 1.2
+      assert index.params.bm25_b == 0.75
+      assert index.params.inverted_index_algo == "DAAT_MAXSCORE"
+      assert index.params.drop_ratio_build == 0.2
+    end
+
+    test "accepts custom bm25 parameters" do
+      index = Index.sparse_bm25("text_sparse", bm25_k1: 1.5, bm25_b: 0.8)
+      assert index.params.bm25_k1 == 1.5
+      assert index.params.bm25_b == 0.8
+    end
+
+    test "accepts daat_maxscore algorithm" do
+      index = Index.sparse_bm25("text_sparse", inverted_index_algo: :daat_maxscore)
+      assert index.params.inverted_index_algo == "DAAT_MAXSCORE"
+    end
+
+    test "accepts daat_wand algorithm" do
+      index = Index.sparse_bm25("text_sparse", inverted_index_algo: :daat_wand)
+      assert index.params.inverted_index_algo == "DAAT_WAND"
+    end
+
+    test "accepts taat_naive algorithm" do
+      index = Index.sparse_bm25("text_sparse", inverted_index_algo: :taat_naive)
+      assert index.params.inverted_index_algo == "TAAT_NAIVE"
+    end
+
+    test "accepts name option" do
+      index = Index.sparse_bm25("text_sparse", name: "my_bm25_index")
+      assert index.name == "my_bm25_index"
+    end
+
+    test "can combine all options" do
+      index =
+        Index.sparse_bm25("text_sparse",
+          inverted_index_algo: :daat_wand,
+          bm25_k1: 2.0,
+          bm25_b: 0.9,
+          name: "custom_bm25"
+        )
+
+      assert index.index_type == :sparse_inverted_index
+      assert index.metric_type == :bm25
+      assert index.params.inverted_index_algo == "DAAT_WAND"
+      assert index.params.bm25_k1 == 2.0
+      assert index.params.bm25_b == 0.9
+      assert index.name == "custom_bm25"
+    end
+
+    test "accepts custom drop_ratio_build" do
+      index = Index.sparse_bm25("text_sparse", drop_ratio_build: 0.1)
+      assert index.params.drop_ratio_build == 0.1
+    end
+
+    test "can combine drop_ratio_build with other options" do
+      index =
+        Index.sparse_bm25("text_sparse",
+          drop_ratio_build: 0.05,
+          bm25_k1: 1.5,
+          inverted_index_algo: :daat_wand
+        )
+
+      assert index.params.drop_ratio_build == 0.05
+      assert index.params.bm25_k1 == 1.5
+      assert index.params.inverted_index_algo == "DAAT_WAND"
+    end
+  end
+
+  describe "sparse_bm25 to_extra_params" do
+    test "converts sparse_bm25 index to extra params" do
+      index = Index.sparse_bm25("text_sparse")
+      params = Index.to_extra_params(index)
+
+      assert Enum.any?(params, fn %KeyValuePair{key: k, value: v} ->
+               k == "index_type" and v == "SPARSE_INVERTED_INDEX"
+             end)
+
+      assert Enum.any?(params, fn %KeyValuePair{key: k, value: v} ->
+               k == "metric_type" and v == "BM25"
+             end)
+
+      assert Enum.any?(params, fn %KeyValuePair{key: k, value: v} ->
+               k == "inverted_index_algo" and v == "DAAT_MAXSCORE"
+             end)
+
+      assert Enum.any?(params, fn %KeyValuePair{key: k, value: v} ->
+               k == "bm25_k1" and v == "1.2"
+             end)
+
+      assert Enum.any?(params, fn %KeyValuePair{key: k, value: v} ->
+               k == "bm25_b" and v == "0.75"
+             end)
+    end
+
+    test "converts sparse_bm25 with custom parameters" do
+      index = Index.sparse_bm25("text_sparse", inverted_index_algo: :taat_naive, bm25_k1: 1.8)
+      params = Index.to_extra_params(index)
+
+      assert Enum.any?(params, fn %KeyValuePair{key: k, value: v} ->
+               k == "inverted_index_algo" and v == "TAAT_NAIVE"
+             end)
+
+      assert Enum.any?(params, fn %KeyValuePair{key: k, value: v} ->
+               k == "bm25_k1" and v == "1.8"
+             end)
     end
   end
 end

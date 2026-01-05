@@ -82,6 +82,7 @@ defmodule Milvex.Collection do
       Milvex.Collection.primary_key(MyApp.Movies)
   """
 
+  alias Milvex.Collection.Dsl.BM25Function
   alias Milvex.Collection.Dsl.Field
   alias Milvex.Milvus.Proto.Schema.CollectionSchema
 
@@ -185,6 +186,14 @@ defmodule Milvex.Collection do
   end
 
   @doc """
+  Returns all function definitions for the given module.
+  """
+  @spec functions(module()) :: [BM25Function.t()]
+  def functions(module) do
+    Spark.Dsl.Extension.get_entities(module, [:collection, :functions])
+  end
+
+  @doc """
   Converts the collection DSL definition to a `Milvex.Schema` struct.
 
   This allows using DSL-defined collections with the existing Milvex API.
@@ -200,6 +209,7 @@ defmodule Milvex.Collection do
       name: collection_name(module),
       description: description(module),
       fields: Enum.map(fields(module), &field_to_schema_field/1),
+      functions: Enum.map(functions(module), &bm25_function_to_function/1),
       enable_dynamic_field: enable_dynamic_field?(module)
     }
   end
@@ -236,8 +246,18 @@ defmodule Milvex.Collection do
       nullable: field.nullable || false,
       is_partition_key: field.partition_key || false,
       is_clustering_key: field.clustering_key || false,
+      enable_analyzer: field.enable_analyzer || false,
       default_value: field.default
     }
+  end
+
+  defp bm25_function_to_function(%BM25Function{} = func) do
+    input_fields = if is_list(func.input), do: func.input, else: [func.input]
+    output_fields = [func.output]
+
+    Milvex.Function.new(Atom.to_string(func.name), :BM25)
+    |> Milvex.Function.input_field_names(input_fields)
+    |> Milvex.Function.output_field_names(output_fields)
   end
 
   defp resolve_data_type(%Field{element_type: :struct}), do: :array_of_struct

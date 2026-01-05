@@ -31,10 +31,11 @@ defmodule Milvex.Index do
     :diskann,
     :gpu_ivf_flat,
     :gpu_ivf_pq,
-    :scann
+    :scann,
+    :sparse_inverted_index
   ]
 
-  @metric_types [:l2, :ip, :cosine, :hamming, :jaccard, :max_sim_cosine, :max_sim_ip]
+  @metric_types [:l2, :ip, :cosine, :hamming, :jaccard, :max_sim_cosine, :max_sim_ip, :bm25]
 
   @index_schema Zoi.object(%{
                   name: Zoi.nullish(Zoi.string()),
@@ -55,8 +56,19 @@ defmodule Milvex.Index do
           | :gpu_ivf_flat
           | :gpu_ivf_pq
           | :scann
+          | :sparse_inverted_index
 
-  @type metric_type :: :l2 | :ip | :cosine | :hamming | :jaccard | :max_sim_cosine | :max_sim_ip
+  @type metric_type ::
+          :l2
+          | :ip
+          | :cosine
+          | :hamming
+          | :jaccard
+          | :max_sim_cosine
+          | :max_sim_ip
+          | :bm25
+
+  @type inverted_index_algo :: :daat_maxscore | :daat_wand | :taat_naive
 
   @type t :: %__MODULE__{
           name: String.t() | nil,
@@ -338,6 +350,52 @@ defmodule Milvex.Index do
   end
 
   @doc """
+  Creates a SPARSE_INVERTED_INDEX for BM25 full-text search.
+
+  Used for SPARSE_FLOAT_VECTOR fields that receive BM25 function output.
+  Supports inverted index algorithms optimized for sparse vectors.
+
+  ## Options
+    - `:inverted_index_algo` - Algorithm to use (default: `:daat_maxscore`)
+      - `:daat_maxscore` - Document-at-a-time with MaxScore optimization
+      - `:daat_wand` - Document-at-a-time with WAND optimization
+      - `:taat_naive` - Term-at-a-time naive approach
+    - `:bm25_k1` - BM25 k1 parameter (default: 1.2)
+    - `:bm25_b` - BM25 b parameter (default: 0.75)
+    - `:drop_ratio_build` - Drop ratio during index build (default: 0.2)
+    - `:name` - Index name (optional)
+
+  ## Examples
+
+      Index.sparse_bm25("text_sparse")
+      Index.sparse_bm25("text_sparse", inverted_index_algo: :daat_wand)
+      Index.sparse_bm25("text_sparse", bm25_k1: 1.5, bm25_b: 0.8)
+      Index.sparse_bm25("text_sparse", drop_ratio_build: 0.1)
+  """
+  @spec sparse_bm25(String.t(), keyword()) :: t()
+  def sparse_bm25(field_name, opts \\ []) do
+    algo = Keyword.get(opts, :inverted_index_algo, :daat_maxscore)
+    k1 = Keyword.get(opts, :bm25_k1, 1.2)
+    b = Keyword.get(opts, :bm25_b, 0.75)
+    drop_ratio = Keyword.get(opts, :drop_ratio_build, 0.2)
+
+    index_params = %{
+      drop_ratio_build: drop_ratio,
+      bm25_k1: k1,
+      bm25_b: b,
+      inverted_index_algo: inverted_algo_to_string(algo)
+    }
+
+    index = new(field_name, :sparse_inverted_index, :bm25) |> params(index_params)
+
+    if index_name = Keyword.get(opts, :name) do
+      name(index, index_name)
+    else
+      index
+    end
+  end
+
+  @doc """
   Validates the index configuration.
 
   Returns `{:ok, index}` if valid, `{:error, error}` otherwise.
@@ -441,6 +499,7 @@ defmodule Milvex.Index do
   defp index_type_to_string(:gpu_ivf_flat), do: "GPU_IVF_FLAT"
   defp index_type_to_string(:gpu_ivf_pq), do: "GPU_IVF_PQ"
   defp index_type_to_string(:scann), do: "SCANN"
+  defp index_type_to_string(:sparse_inverted_index), do: "SPARSE_INVERTED_INDEX"
 
   defp metric_type_to_string(:l2), do: "L2"
   defp metric_type_to_string(:ip), do: "IP"
@@ -449,6 +508,11 @@ defmodule Milvex.Index do
   defp metric_type_to_string(:jaccard), do: "JACCARD"
   defp metric_type_to_string(:max_sim_cosine), do: "MAX_SIM_COSINE"
   defp metric_type_to_string(:max_sim_ip), do: "MAX_SIM_IP"
+  defp metric_type_to_string(:bm25), do: "BM25"
+
+  defp inverted_algo_to_string(:daat_maxscore), do: "DAAT_MAXSCORE"
+  defp inverted_algo_to_string(:daat_wand), do: "DAAT_WAND"
+  defp inverted_algo_to_string(:taat_naive), do: "TAAT_NAIVE"
 
   @doc """
   Returns list of all supported index types.
