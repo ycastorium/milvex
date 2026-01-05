@@ -2,12 +2,15 @@ defmodule Milvex do
   @external_resource "README.md"
   @moduledoc File.read!("README.md")
 
+  alias Milvex.AnnSearch
   alias Milvex.Connection
   alias Milvex.Data
   alias Milvex.Error
   alias Milvex.Errors.Invalid
   alias Milvex.Index
   alias Milvex.QueryResult
+  alias Milvex.Ranker.RRFRanker
+  alias Milvex.Ranker.WeightedRanker
   alias Milvex.RPC
   alias Milvex.Schema
   alias Milvex.Schema.Field
@@ -33,6 +36,7 @@ defmodule Milvex do
   alias Milvex.Milvus.Proto.Milvus.DropPartitionRequest
   alias Milvex.Milvus.Proto.Milvus.HasCollectionRequest
   alias Milvex.Milvus.Proto.Milvus.HasPartitionRequest
+  alias Milvex.Milvus.Proto.Milvus.HybridSearchRequest
   alias Milvex.Milvus.Proto.Milvus.InsertRequest
   alias Milvex.Milvus.Proto.Milvus.LoadCollectionRequest
   alias Milvex.Milvus.Proto.Milvus.LoadPartitionsRequest
@@ -811,6 +815,176 @@ defmodule Milvex do
            {:ok, resp} <- RPC.with_status_check(response, "Search") do
         {:ok, SearchResult.from_proto(resp)}
       end
+    end
+  end
+
+  @doc """
+  Performs a hybrid search combining multiple ANN searches with reranking.
+
+  ## Parameters
+
+    - `conn` - Connection process
+    - `collection` - Collection name or module
+    - `searches` - List of `AnnSearch.t()` structs
+    - `ranker` - `WeightedRanker.t()` or `RRFRanker.t()`
+    - `opts` - Options (see below)
+
+  ## Options
+
+    - `:output_fields` - List of field names to return
+    - `:partition_names` - Partitions to search
+    - `:consistency_level` - Consistency level (default: `:Bounded`)
+    - `:db_name` - Database name (default: "")
+    - `:limit` - Maximum number of final results
+
+  ## Examples
+
+      {:ok, search1} = AnnSearch.new("text_dense", [text_vec], limit: 10)
+      {:ok, search2} = AnnSearch.new("image_dense", [image_vec], limit: 10)
+      {:ok, ranker} = Ranker.weighted([0.7, 0.3])
+
+      {:ok, results} = Milvex.hybrid_search(conn, "products", [search1, search2], ranker,
+        output_fields: ["title", "price"]
+      )
+  """
+  @spec hybrid_search(
+          GenServer.server(),
+          collection_ref(),
+          [AnnSearch.t()],
+          WeightedRanker.t() | RRFRanker.t(),
+          keyword()
+        ) :: {:ok, SearchResult.t()} | {:error, Error.t()}
+  def hybrid_search(conn, collection, searches, ranker, opts \\ [])
+
+  def hybrid_search(_conn, _collection, [], _ranker, _opts) do
+    {:error, Invalid.exception(field: :searches, message: "must be a non-empty list")}
+  end
+
+  def hybrid_search(conn, collection, searches, %WeightedRanker{weights: weights} = ranker, opts) do
+    if length(weights) != length(searches) do
+      {:error, Invalid.exception(field: :weights, message: "count must match number of searches")}
+    else
+      do_hybrid_search(conn, collection, searches, ranker, opts)
+    end
+  end
+
+  def hybrid_search(conn, collection, searches, %RRFRanker{} = ranker, opts) do
+    do_hybrid_search(conn, collection, searches, ranker, opts)
+  end
+
+  defp do_hybrid_search(conn, collection, searches, ranker, opts) do
+    collection_name = resolve_collection_name(collection)
+
+    with {:ok, channel} <- Connection.get_channel(conn),
+         {:ok, info} <- describe_collection(conn, collection_name, opts),
+         {:ok, search_requests} <- build_search_requests(searches, info.schema) do
+      request = %HybridSearchRequest{
+        db_name: get_db_name(opts),
+        collection_name: collection_name,
+        requests: search_requests,
+        rank_params: build_rank_params(ranker, opts),
+        output_fields: Keyword.get(opts, :output_fields, []),
+        partition_names: Keyword.get(opts, :partition_names, []),
+        consistency_level: get_consistency_level(opts)
+      }
+
+      with {:ok, response} <- RPC.call(channel, MilvusService.Stub, :hybrid_search, request),
+           {:ok, resp} <- RPC.with_status_check(response, "HybridSearch") do
+        {:ok, SearchResult.from_proto(resp)}
+      end
+    end
+  end
+
+  defp build_search_requests(searches, schema) do
+    results =
+      Enum.map(searches, fn search ->
+        ann_search_to_search_request(search, schema)
+      end)
+
+    case Enum.find(results, &match?({:error, _}, &1)) do
+      nil -> {:ok, Enum.map(results, fn {:ok, req} -> req end)}
+      error -> error
+    end
+  end
+
+  defp ann_search_to_search_request(%AnnSearch{} = search, schema) do
+    with {:ok, field, is_nested} <- find_vector_field(schema, search.anns_field),
+         {:ok, placeholder_bytes} <- build_ann_placeholder_group(search.data, field, is_nested) do
+      request = %SearchRequest{
+        dsl: search.expr || "",
+        dsl_type: :BoolExprV1,
+        search_input: {:placeholder_group, placeholder_bytes},
+        search_params: build_ann_search_params(search),
+        nq: length(search.data)
+      }
+
+      {:ok, request}
+    end
+  end
+
+  defp build_ann_placeholder_group(data, field, is_nested) do
+    cond do
+      all_vectors_data?(data) -> build_placeholder_group(data, field, is_nested)
+      all_strings_data?(data) -> build_text_placeholder_group(data)
+      true -> {:error, Invalid.exception(field: :data, message: "invalid data format")}
+    end
+  end
+
+  defp all_vectors_data?(data), do: Enum.all?(data, &is_list/1)
+  defp all_strings_data?(data), do: Enum.all?(data, &is_binary/1)
+
+  defp build_text_placeholder_group(texts) do
+    placeholder = %PlaceholderValue{
+      tag: "$0",
+      type: :VarChar,
+      values: texts
+    }
+
+    group = %PlaceholderGroup{placeholders: [placeholder]}
+    {:ok, PlaceholderGroup.encode(group)}
+  rescue
+    e ->
+      {:error, Invalid.exception(field: :data, message: "Failed to encode text: #{inspect(e)}")}
+  end
+
+  defp build_ann_search_params(%AnnSearch{anns_field: field, limit: limit, params: params}) do
+    base_params = [
+      %KeyValuePair{key: "anns_field", value: field},
+      %KeyValuePair{key: "topk", value: to_string(limit)}
+    ]
+
+    case params do
+      nil ->
+        [%KeyValuePair{key: "params", value: "{}"} | base_params]
+
+      extra when is_map(extra) ->
+        encoded = Jason.encode!(extra)
+        [%KeyValuePair{key: "params", value: encoded} | base_params]
+    end
+  end
+
+  defp build_rank_params(%WeightedRanker{weights: weights}, opts) do
+    params = Jason.encode!(%{weights: weights})
+
+    [
+      %KeyValuePair{key: "strategy", value: "weighted"},
+      %KeyValuePair{key: "params", value: params}
+    ] ++ build_limit_params(opts)
+  end
+
+  defp build_rank_params(%RRFRanker{k: k}, opts) do
+    params = Jason.encode!(%{k: k})
+
+    [
+      %KeyValuePair{key: "strategy", value: "rrf"},
+      %KeyValuePair{key: "params", value: params}
+    ] ++ build_limit_params(opts)
+  end
+
+  defp build_limit_params(opts) do
+    case Keyword.get(opts, :limit) do
+      nil -> []
+      limit -> [%KeyValuePair{key: "limit", value: to_string(limit)}]
     end
   end
 
