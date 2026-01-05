@@ -101,6 +101,16 @@ defmodule Milvex.Schema.FieldTest do
       field = Field.new("status", :varchar) |> Field.default("active")
       assert field.default_value == "active"
     end
+
+    test "enable_analyzer/2 enables text analyzer" do
+      field = Field.new("content", :varchar) |> Field.enable_analyzer()
+      assert field.enable_analyzer == true
+    end
+
+    test "enable_analyzer/2 accepts boolean argument" do
+      field = Field.new("content", :varchar) |> Field.enable_analyzer(false)
+      assert field.enable_analyzer == false
+    end
   end
 
   describe "smart constructors" do
@@ -162,6 +172,11 @@ defmodule Milvex.Schema.FieldTest do
     test "varchar/3 with nullable option" do
       field = Field.varchar("title", 256, nullable: true)
       assert field.nullable == true
+    end
+
+    test "varchar/3 with enable_analyzer option" do
+      field = Field.varchar("content", 4096, enable_analyzer: true)
+      assert field.enable_analyzer == true
     end
 
     test "scalar/3 creates scalar field" do
@@ -430,6 +445,43 @@ defmodule Milvex.Schema.FieldTest do
       assert restored.data_type == original.data_type
       assert restored.dimension == original.dimension
       assert restored.description == original.description
+    end
+
+    test "to_proto includes enable_analyzer in type_params" do
+      field = Field.varchar("content", 4096, enable_analyzer: true)
+      proto = Field.to_proto(field)
+
+      assert Enum.any?(proto.type_params, fn %KeyValuePair{key: k, value: v} ->
+               k == "enable_analyzer" and v == "true"
+             end)
+    end
+
+    test "from_proto decodes enable_analyzer from type_params" do
+      proto = %FieldSchema{
+        name: "content",
+        data_type: :VarChar,
+        is_primary_key: false,
+        autoID: false,
+        type_params: [
+          %KeyValuePair{key: "max_length", value: "4096"},
+          %KeyValuePair{key: "enable_analyzer", value: "true"}
+        ],
+        nullable: false
+      }
+
+      field = Field.from_proto(proto)
+      assert field.enable_analyzer == true
+    end
+
+    test "roundtrip conversion preserves enable_analyzer" do
+      original = Field.varchar("content", 4096, enable_analyzer: true)
+      proto = Field.to_proto(original)
+      restored = Field.from_proto(proto)
+
+      assert restored.name == original.name
+      assert restored.data_type == original.data_type
+      assert restored.max_length == original.max_length
+      assert restored.enable_analyzer == original.enable_analyzer
     end
   end
 

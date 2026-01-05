@@ -240,6 +240,66 @@ defmodule Milvex.SchemaTest do
       {:error, error} = Schema.validate(schema)
       assert error.field == :dimension
     end
+
+    test "rejects BM25 function with missing input field" do
+      schema =
+        Schema.new("docs")
+        |> Schema.add_field(Field.primary_key("id", :int64))
+        |> Schema.add_field(Field.varchar("content", 2048, enable_analyzer: true))
+        |> Schema.add_field(Field.sparse_vector("sparse"))
+        |> Schema.add_function(
+          Milvex.Function.bm25("bm25_fn", input: "missing", output: "sparse")
+        )
+
+      {:error, error} = Schema.validate(schema)
+      assert error.field == :functions
+      assert error.message =~ "missing"
+      assert error.message =~ "enable_analyzer"
+    end
+
+    test "rejects BM25 function with input field missing enable_analyzer" do
+      schema =
+        Schema.new("docs")
+        |> Schema.add_field(Field.primary_key("id", :int64))
+        |> Schema.add_field(Field.varchar("content", 2048))
+        |> Schema.add_field(Field.sparse_vector("sparse"))
+        |> Schema.add_function(
+          Milvex.Function.bm25("bm25_fn", input: "content", output: "sparse")
+        )
+
+      {:error, error} = Schema.validate(schema)
+      assert error.field == :functions
+      assert error.message =~ "content"
+      assert error.message =~ "enable_analyzer"
+    end
+
+    test "rejects BM25 function with missing output field" do
+      schema =
+        Schema.new("docs")
+        |> Schema.add_field(Field.primary_key("id", :int64))
+        |> Schema.add_field(Field.varchar("content", 2048, enable_analyzer: true))
+        |> Schema.add_function(
+          Milvex.Function.bm25("bm25_fn", input: "content", output: "sparse")
+        )
+
+      {:error, error} = Schema.validate(schema)
+      assert error.field == :functions
+      assert error.message =~ "missing output fields"
+      assert error.message =~ "sparse"
+    end
+
+    test "accepts valid BM25 function configuration" do
+      schema =
+        Schema.new("docs")
+        |> Schema.add_field(Field.primary_key("id", :int64))
+        |> Schema.add_field(Field.varchar("content", 2048, enable_analyzer: true))
+        |> Schema.add_field(Field.sparse_vector("sparse"))
+        |> Schema.add_function(
+          Milvex.Function.bm25("bm25_fn", input: "content", output: "sparse")
+        )
+
+      assert {:ok, _} = Schema.validate(schema)
+    end
   end
 
   describe "validate!/1" do
@@ -444,6 +504,109 @@ defmodule Milvex.SchemaTest do
       struct_arrays = Schema.struct_array_fields(schema)
       assert length(struct_arrays) == 1
       assert hd(struct_arrays).name == "sentences"
+    end
+  end
+
+  describe "functions" do
+    test "add_function/2 adds a function to the schema" do
+      function = Milvex.Function.bm25("bm25_fn", input: "content", output: "sparse")
+      schema = Schema.new("docs") |> Schema.add_function(function)
+
+      assert length(schema.functions) == 1
+      assert hd(schema.functions).name == "bm25_fn"
+    end
+
+    test "add_function/2 appends functions in order" do
+      func1 = Milvex.Function.bm25("bm25_fn1", input: "content", output: "sparse1")
+      func2 = Milvex.Function.bm25("bm25_fn2", input: "title", output: "sparse2")
+
+      schema =
+        Schema.new("docs")
+        |> Schema.add_function(func1)
+        |> Schema.add_function(func2)
+
+      assert length(schema.functions) == 2
+      assert Enum.map(schema.functions, & &1.name) == ["bm25_fn1", "bm25_fn2"]
+    end
+
+    test "to_proto/1 includes functions in CollectionSchema" do
+      function = Milvex.Function.bm25("bm25_fn", input: "content", output: "sparse")
+
+      schema =
+        Schema.new("docs")
+        |> Schema.add_field(Field.primary_key("id", :int64))
+        |> Schema.add_field(Field.varchar("content", 4096))
+        |> Schema.add_function(function)
+
+      proto = Schema.to_proto(schema)
+
+      assert length(proto.functions) == 1
+      assert hd(proto.functions).name == "bm25_fn"
+      assert hd(proto.functions).type == :BM25
+      assert hd(proto.functions).input_field_names == ["content"]
+      assert hd(proto.functions).output_field_names == ["sparse"]
+    end
+
+    test "from_proto/1 recreates functions correctly" do
+      function = Milvex.Function.bm25("bm25_fn", input: "content", output: "sparse")
+
+      original =
+        Schema.new("docs")
+        |> Schema.add_field(Field.primary_key("id", :int64))
+        |> Schema.add_field(Field.varchar("content", 4096))
+        |> Schema.add_function(function)
+
+      proto = Schema.to_proto(original)
+      restored = Schema.from_proto(proto)
+
+      assert length(restored.functions) == 1
+      restored_func = hd(restored.functions)
+      assert restored_func.name == "bm25_fn"
+      assert restored_func.type == :BM25
+      assert restored_func.input_field_names == ["content"]
+      assert restored_func.output_field_names == ["sparse"]
+    end
+
+    test "from_proto/1 handles nil functions" do
+      proto = %CollectionSchema{
+        name: "docs",
+        description: "",
+        fields: [
+          %Milvex.Milvus.Proto.Schema.FieldSchema{
+            name: "id",
+            data_type: :Int64,
+            is_primary_key: true
+          }
+        ],
+        functions: nil
+      }
+
+      schema = Schema.from_proto(proto)
+      assert schema.functions == []
+    end
+
+    test "roundtrip with functions preserves all function data" do
+      func1 = Milvex.Function.bm25("bm25_fn1", input: "content", output: "sparse1")
+      func2 = Milvex.Function.bm25("bm25_fn2", input: ["title", "desc"], output: "sparse2")
+
+      original =
+        Schema.new("docs")
+        |> Schema.add_field(Field.primary_key("id", :int64))
+        |> Schema.add_field(Field.varchar("content", 4096))
+        |> Schema.add_function(func1)
+        |> Schema.add_function(func2)
+
+      proto = Schema.to_proto(original)
+      restored = Schema.from_proto(proto)
+
+      assert length(restored.functions) == 2
+
+      for {orig, rest} <- Enum.zip(original.functions, restored.functions) do
+        assert rest.name == orig.name
+        assert rest.type == orig.type
+        assert rest.input_field_names == orig.input_field_names
+        assert rest.output_field_names == orig.output_field_names
+      end
     end
   end
 

@@ -73,7 +73,8 @@ defmodule Milvex.Schema.Field do
           is_partition_key: boolean(),
           is_clustering_key: boolean(),
           default_value: term() | nil,
-          struct_schema: [t()] | nil
+          struct_schema: [t()] | nil,
+          enable_analyzer: boolean()
         }
 
   defstruct [
@@ -90,7 +91,8 @@ defmodule Milvex.Schema.Field do
     auto_id: false,
     nullable: false,
     is_partition_key: false,
-    is_clustering_key: false
+    is_clustering_key: false,
+    enable_analyzer: false
   ]
 
   @doc """
@@ -217,6 +219,15 @@ defmodule Milvex.Schema.Field do
   end
 
   @doc """
+  Enables text analyzer for varchar fields.
+  Used for BM25 full-text search.
+  """
+  @spec enable_analyzer(t(), boolean()) :: t()
+  def enable_analyzer(%__MODULE__{} = field, value \\ true) when is_boolean(value) do
+    %{field | enable_analyzer: value}
+  end
+
+  @doc """
   Creates a primary key field with common defaults.
 
   ## Options
@@ -306,11 +317,13 @@ defmodule Milvex.Schema.Field do
     - `:nullable` - Allow null values (default: false)
     - `:description` - Field description
     - `:default` - Default value
+    - `:enable_analyzer` - Enable text analyzer for BM25 search (default: false)
 
   ## Examples
 
       Field.varchar("title", 256)
       Field.varchar("description", 1024, nullable: true)
+      Field.varchar("content", 4096, enable_analyzer: true)
   """
   @spec varchar(String.t(), pos_integer(), keyword()) :: t()
   def varchar(name, len, opts \\ []) when is_integer(len) and len > 0 do
@@ -318,6 +331,7 @@ defmodule Milvex.Schema.Field do
       new(name, :varchar)
       |> max_length(len)
       |> nullable(Keyword.get(opts, :nullable, false))
+      |> enable_analyzer(Keyword.get(opts, :enable_analyzer, false))
 
     field =
       if desc = Keyword.get(opts, :description) do
@@ -638,6 +652,7 @@ defmodule Milvex.Schema.Field do
       nullable: proto.nullable,
       is_partition_key: proto.is_partition_key,
       is_clustering_key: proto.is_clustering_key,
+      enable_analyzer: type_params[:enable_analyzer] || false,
       element_type:
         if(proto.element_type != :None, do: data_type_from_proto(proto.element_type), else: nil)
     }
@@ -648,6 +663,7 @@ defmodule Milvex.Schema.Field do
     |> maybe_add_param("dim", field.dimension)
     |> maybe_add_param("max_length", field.max_length)
     |> maybe_add_param("max_capacity", field.max_capacity)
+    |> maybe_add_bool_param("enable_analyzer", field.enable_analyzer)
   end
 
   defp maybe_add_param(params, _key, nil), do: params
@@ -656,12 +672,19 @@ defmodule Milvex.Schema.Field do
     [%KeyValuePair{key: key, value: to_string(value)} | params]
   end
 
+  defp maybe_add_bool_param(params, _key, false), do: params
+
+  defp maybe_add_bool_param(params, key, true) do
+    [%KeyValuePair{key: key, value: "true"} | params]
+  end
+
   defp parse_type_params(params) do
     Enum.reduce(params, %{}, fn %KeyValuePair{key: key, value: value}, acc ->
       case key do
         "dim" -> Map.put(acc, :dim, String.to_integer(value))
         "max_length" -> Map.put(acc, :max_length, String.to_integer(value))
         "max_capacity" -> Map.put(acc, :max_capacity, String.to_integer(value))
+        "enable_analyzer" -> Map.put(acc, :enable_analyzer, value == "true")
         _ -> acc
       end
     end)

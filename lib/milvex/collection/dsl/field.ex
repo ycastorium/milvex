@@ -19,6 +19,7 @@ defmodule Milvex.Collection.Dsl.Field do
           nullable: boolean(),
           partition_key: boolean(),
           clustering_key: boolean(),
+          enable_analyzer: boolean(),
           default: term() | nil,
           description: String.t() | nil
         }
@@ -38,7 +39,8 @@ defmodule Milvex.Collection.Dsl.Field do
     auto_id: false,
     nullable: false,
     partition_key: false,
-    clustering_key: false
+    clustering_key: false,
+    enable_analyzer: false
   ]
 
   @scalar_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :json, :text, :varchar]
