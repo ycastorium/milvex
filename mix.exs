@@ -4,7 +4,7 @@ defmodule Milvex.MixProject do
   def project do
     [
       app: :milvex,
-      version: "0.4.2",
+      version: "0.5.0",
       description: description(),
       package: package(),
       elixir: "~> 1.19",

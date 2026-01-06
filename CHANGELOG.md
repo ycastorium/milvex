@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/grain-team/milvex/compare/v0.4.2...v0.5.0) (2026-01-06)
+
+
+### Features
+
+* add BM25 full-text search support ([d33c532](https://github.com/grain-team/milvex/commit/d33c532eb8949ab1429d78b561ae1491af69b162))
+
+
+### Bug Fixes
+
+* Fixed bm25 validation ([805a7a3](https://github.com/grain-team/milvex/commit/805a7a32260732cfa25f1accc355e04433f9180e))
+* Fixed multi-vector mapping ([f412281](https://github.com/grain-team/milvex/commit/f41228138407dcf2620b5b5129b2ed2183e4d7f4))
+* Fixed multiple index creation ([e9efbd4](https://github.com/grain-team/milvex/commit/e9efbd403b804810b6be09333747a00ac4578dfd))
+* Fixes sparse-fields creation when its a struct ([f900faa](https://github.com/grain-team/milvex/commit/f900faaaf847090ee372134e81494c9c3386da4a))
+* Parsing fector array correctly ([0d0e663](https://github.com/grain-team/milvex/commit/0d0e66351c17c38a5db97174f7ea5e65debf0ce4))
+
 ## [0.4.2](https://github.com/grain-team/milvex/compare/v0.4.0...v0.4.2) (2025-12-19)
 
 
