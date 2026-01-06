@@ -173,25 +173,32 @@ defmodule Milvex.Data do
   defp transpose_rows_to_columns(rows, schema) do
     function_output_fields = get_function_output_fields(schema)
 
-    field_names =
+    # Fields to include in insert (excludes auto_id and function outputs)
+    insertable_field_names =
       schema.fields
       |> Enum.filter(fn f -> not f.auto_id and f.name not in function_output_fields end)
       |> Enum.map(& &1.name)
 
-    field_names_set = MapSet.new(field_names)
-    init = Map.new(field_names, fn name -> {name, []} end)
+    # ALL static field names (for dynamic field detection)
+    all_static_field_names =
+      schema.fields
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+
+    init = Map.new(insertable_field_names, fn name -> {name, []} end)
 
     columns =
       rows
       |> Enum.reduce(init, fn row, acc ->
-        Enum.reduce(field_names, acc, fn name, inner_acc ->
+        Enum.reduce(insertable_field_names, acc, fn name, inner_acc ->
           Map.update!(inner_acc, name, fn vals -> [get_row_value(row, name) | vals] end)
         end)
       end)
       |> Map.new(fn {k, v} -> {k, Enum.reverse(v)} end)
 
     if schema.enable_dynamic_field do
-      add_dynamic_fields(columns, rows, field_names_set)
+      # Pass ALL static names
+      add_dynamic_fields(columns, rows, all_static_field_names)
     else
       columns
     end
