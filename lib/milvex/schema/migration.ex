@@ -242,14 +242,11 @@ defmodule Milvex.Schema.Migration do
            collection_name,
            Keyword.put(opts, :field_name, field_name)
          ) do
-      {:ok, [index_desc | _]} ->
-        {:ok, index_desc}
-
-      {:ok, []} ->
-        {:ok, nil}
+      {:ok, index_descriptions} ->
+        matching = Enum.find(index_descriptions, fn desc -> desc.field_name == field_name end)
+        {:ok, matching}
 
       {:error, %{code: 700}} ->
-        # Index not found - treat as no index exists
         {:ok, nil}
 
       {:error, %{message: msg}} when is_binary(msg) ->
