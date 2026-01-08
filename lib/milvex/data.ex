@@ -100,9 +100,10 @@ defmodule Milvex.Data do
 
     with :ok <- validate_columns(columns, schema) do
       num_rows = get_column_length(columns)
+      has_dynamic_fields = schema.enable_dynamic_field or has_dynamic_schema_fields?(schema)
 
       columns =
-        if schema.enable_dynamic_field do
+        if has_dynamic_fields do
           separate_dynamic_columns(columns, schema)
         else
           columns
@@ -128,15 +129,21 @@ defmodule Milvex.Data do
   """
   @spec to_proto(t()) :: [Milvex.Milvus.Proto.Schema.FieldData.t()]
   def to_proto(%__MODULE__{fields: fields, schema: schema}) do
+    # Exclude fields marked with is_dynamic from regular field data
     schema_field_data =
       schema.fields
-      |> Enum.filter(fn field -> Map.has_key?(fields, field.name) end)
+      |> Enum.filter(fn field ->
+        Map.has_key?(fields, field.name) and not field.is_dynamic
+      end)
       |> Enum.map(fn field ->
         values = Map.get(fields, field.name)
         FieldData.to_proto(field.name, values, field)
       end)
 
-    case {schema.enable_dynamic_field, Map.get(fields, "$meta")} do
+    # Add $meta when we have dynamic values (from enable_dynamic_field or is_dynamic fields)
+    has_dynamic_support = schema.enable_dynamic_field or has_dynamic_schema_fields?(schema)
+
+    case {has_dynamic_support, Map.get(fields, "$meta")} do
       {true, dynamic_values} when dynamic_values != nil ->
         dynamic_field_data = FieldData.to_proto_dynamic("$meta", dynamic_values)
         schema_field_data ++ [dynamic_field_data]
@@ -172,14 +179,19 @@ defmodule Milvex.Data do
 
   defp transpose_rows_to_columns(rows, schema) do
     function_output_fields = get_function_output_fields(schema)
+    dynamic_schema_field_names = get_dynamic_schema_field_names(schema)
 
-    # Fields to include in insert (excludes auto_id and function outputs)
+    # Fields to include in insert (excludes auto_id, function outputs, and is_dynamic fields)
     insertable_field_names =
       schema.fields
-      |> Enum.filter(fn f -> not f.auto_id and f.name not in function_output_fields end)
+      |> Enum.filter(fn f ->
+        not f.auto_id and
+          f.name not in function_output_fields and
+          not f.is_dynamic
+      end)
       |> Enum.map(& &1.name)
 
-    # ALL static field names (for dynamic field detection)
+    # ALL static field names (for undefined dynamic field detection)
     all_static_field_names =
       schema.fields
       |> Enum.map(& &1.name)
@@ -196,24 +208,39 @@ defmodule Milvex.Data do
       end)
       |> Map.new(fn {k, v} -> {k, Enum.reverse(v)} end)
 
-    if schema.enable_dynamic_field do
-      # Pass ALL static names
-      add_dynamic_fields(columns, rows, all_static_field_names)
+    has_dynamic_fields =
+      schema.enable_dynamic_field or MapSet.size(dynamic_schema_field_names) > 0
+
+    if has_dynamic_fields do
+      add_dynamic_fields(columns, rows, all_static_field_names, dynamic_schema_field_names)
     else
       columns
     end
   end
 
-  defp add_dynamic_fields(columns, rows, schema_field_names) do
+  defp add_dynamic_fields(columns, rows, schema_field_names, dynamic_schema_field_names) do
     dynamic_values =
       rows
       |> Enum.map(fn row ->
-        row
-        |> Enum.reject(fn {k, _v} ->
-          key = normalize_key(k)
-          MapSet.member?(schema_field_names, key)
-        end)
-        |> Map.new(fn {k, v} -> {normalize_key(k), v} end)
+        # Collect undefined fields (not in schema)
+        undefined_fields =
+          row
+          |> Enum.reject(fn {k, _v} ->
+            key = normalize_key(k)
+            MapSet.member?(schema_field_names, key)
+          end)
+          |> Map.new(fn {k, v} -> {normalize_key(k), v} end)
+
+        # Collect values from fields marked with is_dynamic in schema
+        dynamic_schema_values =
+          row
+          |> Enum.filter(fn {k, _v} ->
+            key = normalize_key(k)
+            MapSet.member?(dynamic_schema_field_names, key)
+          end)
+          |> Map.new(fn {k, v} -> {normalize_key(k), v} end)
+
+        Map.merge(undefined_fields, dynamic_schema_values)
       end)
 
     if Enum.all?(dynamic_values, &(map_size(&1) == 0)) do
@@ -227,20 +254,41 @@ defmodule Milvex.Data do
   defp normalize_key(k), do: k
 
   defp separate_dynamic_columns(columns, schema) do
-    schema_field_names =
+    # Regular field names (not marked as is_dynamic)
+    regular_field_names =
+      schema.fields
+      |> Enum.reject(& &1.is_dynamic)
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+
+    # Field names marked as is_dynamic
+    dynamic_schema_field_names = get_dynamic_schema_field_names(schema)
+
+    # All schema field names (for detecting undefined columns)
+    all_schema_field_names =
       schema.fields
       |> Enum.map(& &1.name)
       |> MapSet.new()
 
-    {schema_columns, dynamic_columns} =
-      Map.split_with(columns, fn {k, _v} -> MapSet.member?(schema_field_names, k) end)
+    # Regular columns are those in schema and NOT marked as is_dynamic
+    {regular_columns, other_columns} =
+      Map.split_with(columns, fn {k, _v} -> MapSet.member?(regular_field_names, k) end)
+
+    # Collect columns that are: undefined OR marked as is_dynamic
+    dynamic_columns =
+      other_columns
+      |> Enum.filter(fn {k, _v} ->
+        not MapSet.member?(all_schema_field_names, k) or
+          MapSet.member?(dynamic_schema_field_names, k)
+      end)
+      |> Map.new()
 
     if map_size(dynamic_columns) == 0 do
-      schema_columns
+      regular_columns
     else
       num_rows = get_column_length(columns)
       dynamic_values = transpose_dynamic_columns_to_rows(dynamic_columns, num_rows)
-      Map.put(schema_columns, "$meta", dynamic_values)
+      Map.put(regular_columns, "$meta", dynamic_values)
     end
   end
 
@@ -353,7 +401,8 @@ defmodule Milvex.Data do
 
     schema.fields
     |> Enum.filter(fn field ->
-      not field.auto_id and not field.nullable and field.name not in function_output_fields
+      not field.auto_id and not field.nullable and not field.is_dynamic and
+        field.name not in function_output_fields
     end)
     |> Enum.map(& &1.name)
     |> MapSet.new()
@@ -363,6 +412,17 @@ defmodule Milvex.Data do
     schema.functions
     |> Enum.flat_map(& &1.output_field_names)
     |> MapSet.new()
+  end
+
+  defp get_dynamic_schema_field_names(schema) do
+    schema.fields
+    |> Enum.filter(& &1.is_dynamic)
+    |> Enum.map(& &1.name)
+    |> MapSet.new()
+  end
+
+  defp has_dynamic_schema_fields?(schema) do
+    Enum.any?(schema.fields, & &1.is_dynamic)
   end
 
   defp get_column_length(columns) when map_size(columns) == 0, do: 0

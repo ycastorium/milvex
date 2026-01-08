@@ -246,6 +246,7 @@ defmodule Milvex.Collection do
       nullable: field.nullable || false,
       is_partition_key: field.partition_key || false,
       is_clustering_key: field.clustering_key || false,
+      is_dynamic: field.dynamic || false,
       enable_analyzer: field.enable_analyzer || false,
       default_value: field.default
     }

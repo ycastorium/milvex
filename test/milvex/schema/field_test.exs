@@ -542,4 +542,114 @@ defmodule Milvex.Schema.FieldTest do
       refute Field.struct?(scalar)
     end
   end
+
+  describe "dynamic/2" do
+    test "marks field as dynamic" do
+      field = Field.new("name", :varchar) |> Field.max_length(256) |> Field.dynamic()
+      assert field.is_dynamic == true
+    end
+
+    test "accepts boolean argument" do
+      field = Field.new("name", :varchar) |> Field.max_length(256) |> Field.dynamic(false)
+      assert field.is_dynamic == false
+    end
+
+    test "defaults to false" do
+      field = Field.new("name", :varchar) |> Field.max_length(256)
+      assert field.is_dynamic == false
+    end
+  end
+
+  describe "dynamic field validation" do
+    test "validates varchar field with dynamic" do
+      field = Field.varchar("name", 256, dynamic: true)
+      assert {:ok, _} = Field.validate(field)
+    end
+
+    test "validates scalar field with dynamic" do
+      for type <- [:bool, :int8, :int16, :int32, :int64, :float, :double] do
+        field = Field.scalar("test", type, dynamic: true)
+        assert {:ok, _} = Field.validate(field)
+      end
+    end
+
+    test "validates json field with dynamic" do
+      field = Field.scalar("metadata", :json, dynamic: true)
+      assert {:ok, _} = Field.validate(field)
+    end
+
+    test "rejects dynamic on vector fields" do
+      field = Field.new("embedding", :float_vector) |> Field.dimension(128) |> Field.dynamic()
+      assert {:error, error} = Field.validate(field)
+      assert error.field == :is_dynamic
+      assert error.message =~ "scalar types"
+    end
+
+    test "rejects dynamic on array fields" do
+      field = Field.array("tags", :varchar, max_capacity: 100, max_length: 64)
+      field = %{field | is_dynamic: true}
+      assert {:error, error} = Field.validate(field)
+      assert error.field == :is_dynamic
+    end
+
+    test "rejects dynamic on struct fields" do
+      struct_fields = [Field.varchar("text", 1024)]
+      field = Field.struct("sentence", fields: struct_fields)
+      field = %{field | is_dynamic: true}
+      assert {:error, error} = Field.validate(field)
+      assert error.field == :is_dynamic
+    end
+  end
+
+  describe "dynamic field proto conversion" do
+    test "to_proto does not include is_dynamic (Milvus sets this internally)" do
+      # is_dynamic is NOT sent to Milvus because Milvus rejects explicit is_dynamic flags
+      # Instead, dynamic fields are handled at the data layer by routing to $meta
+      field = Field.varchar("name", 256, dynamic: true)
+      proto = Field.to_proto(field)
+      # Proto will have the default false value since we don't set it
+      assert proto.is_dynamic == false
+    end
+
+    test "from_proto parses is_dynamic from Milvus response" do
+      # Milvus sets is_dynamic on the auto-generated $meta field
+      # We should correctly parse this when reading schema back
+      proto = %FieldSchema{
+        name: "$meta",
+        data_type: :JSON,
+        is_primary_key: false,
+        autoID: false,
+        type_params: [],
+        nullable: false,
+        is_dynamic: true
+      }
+
+      field = Field.from_proto(proto)
+      assert field.is_dynamic == true
+    end
+
+    test "from_proto defaults is_dynamic to false" do
+      proto = %FieldSchema{
+        name: "name",
+        data_type: :VarChar,
+        is_primary_key: false,
+        autoID: false,
+        type_params: [%KeyValuePair{key: "max_length", value: "256"}],
+        nullable: false,
+        is_dynamic: false
+      }
+
+      field = Field.from_proto(proto)
+      assert field.is_dynamic == false
+    end
+
+    test "is_dynamic flag preserved on Field struct for data routing" do
+      # is_dynamic is used internally to route field data to $meta
+      field = Field.varchar("metadata", 256, dynamic: true)
+      assert field.is_dynamic == true
+
+      field2 = Field.scalar("extra", :json, dynamic: true)
+      assert field2.is_dynamic == true
+    end
+  end
 end

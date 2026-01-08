@@ -489,4 +489,161 @@ defmodule Milvex.DataTest do
       refute "$meta" in field_names
     end
   end
+
+  describe "with is_dynamic schema fields" do
+    test "from_rows routes is_dynamic field values to $meta" do
+      schema =
+        Schema.build!(
+          name: "test_is_dynamic",
+          fields: [
+            Field.primary_key("id", :int64, auto_id: true),
+            Field.varchar("title", 256),
+            Field.varchar("metadata", 512, dynamic: true),
+            Field.vector("embedding", 4)
+          ]
+        )
+
+      rows = [
+        %{title: "Item 1", metadata: "meta1", embedding: [0.1, 0.2, 0.3, 0.4]},
+        %{title: "Item 2", metadata: "meta2", embedding: [0.5, 0.6, 0.7, 0.8]}
+      ]
+
+      {:ok, data} = Data.from_rows(rows, schema)
+
+      assert Data.get_field(data, "title") == ["Item 1", "Item 2"]
+      assert Data.get_field(data, "embedding") == [[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8]]
+      assert Data.get_field(data, "$meta") == [%{"metadata" => "meta1"}, %{"metadata" => "meta2"}]
+      assert Data.get_field(data, "metadata") == nil
+    end
+
+    test "from_columns routes is_dynamic field values to $meta" do
+      schema =
+        Schema.build!(
+          name: "test_is_dynamic_cols",
+          fields: [
+            Field.primary_key("id", :int64, auto_id: true),
+            Field.varchar("title", 256),
+            Field.scalar("extra", :json, dynamic: true),
+            Field.vector("embedding", 4)
+          ]
+        )
+
+      columns = %{
+        title: ["A", "B"],
+        extra: [%{"key" => "val1"}, %{"key" => "val2"}],
+        embedding: [[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8]]
+      }
+
+      {:ok, data} = Data.from_columns(columns, schema)
+
+      assert Data.get_field(data, "title") == ["A", "B"]
+
+      assert Data.get_field(data, "$meta") == [
+               %{"extra" => %{"key" => "val1"}},
+               %{"extra" => %{"key" => "val2"}}
+             ]
+
+      assert Data.get_field(data, "extra") == nil
+    end
+
+    test "to_proto excludes is_dynamic fields from regular field data" do
+      schema =
+        Schema.build!(
+          name: "test_is_dynamic_proto",
+          fields: [
+            Field.primary_key("id", :int64, auto_id: true),
+            Field.varchar("title", 256),
+            Field.varchar("metadata", 512, dynamic: true),
+            Field.vector("embedding", 4)
+          ]
+        )
+
+      rows = [
+        %{title: "Item 1", metadata: "meta1", embedding: [0.1, 0.2, 0.3, 0.4]}
+      ]
+
+      {:ok, data} = Data.from_rows(rows, schema)
+      proto = Data.to_proto(data)
+
+      field_names = Enum.map(proto, & &1.field_name)
+      assert "title" in field_names
+      assert "embedding" in field_names
+      assert "$meta" in field_names
+      refute "metadata" in field_names
+
+      meta_field = Enum.find(proto, &(&1.field_name == "$meta"))
+      assert meta_field.is_dynamic == true
+    end
+
+    test "is_dynamic fields are not required for validation" do
+      schema =
+        Schema.build!(
+          name: "test_not_required",
+          fields: [
+            Field.primary_key("id", :int64, auto_id: true),
+            Field.varchar("title", 256),
+            Field.varchar("optional_meta", 512, dynamic: true),
+            Field.vector("embedding", 4)
+          ]
+        )
+
+      # Rows without the is_dynamic field should be valid
+      rows = [
+        %{title: "Item 1", embedding: [0.1, 0.2, 0.3, 0.4]}
+      ]
+
+      {:ok, data} = Data.from_rows(rows, schema)
+      assert Data.get_field(data, "title") == ["Item 1"]
+    end
+
+    test "multiple is_dynamic fields route to $meta" do
+      schema =
+        Schema.build!(
+          name: "test_multi_dynamic",
+          fields: [
+            Field.primary_key("id", :int64, auto_id: true),
+            Field.varchar("title", 256),
+            Field.varchar("meta1", 256, dynamic: true),
+            Field.scalar("meta2", :int64, dynamic: true),
+            Field.vector("embedding", 4)
+          ]
+        )
+
+      rows = [
+        %{title: "Item", meta1: "val1", meta2: 42, embedding: [0.1, 0.2, 0.3, 0.4]}
+      ]
+
+      {:ok, data} = Data.from_rows(rows, schema)
+
+      assert Data.get_field(data, "$meta") == [%{"meta1" => "val1", "meta2" => 42}]
+    end
+
+    test "combines is_dynamic fields with enable_dynamic_field undefined fields" do
+      schema =
+        Schema.build!(
+          name: "test_combined",
+          enable_dynamic_field: true,
+          fields: [
+            Field.primary_key("id", :int64, auto_id: true),
+            Field.varchar("title", 256),
+            Field.varchar("schema_dynamic", 256, dynamic: true),
+            Field.vector("embedding", 4)
+          ]
+        )
+
+      rows = [
+        %{
+          title: "Item",
+          schema_dynamic: "from_schema",
+          undefined_field: "from_row",
+          embedding: [0.1, 0.2, 0.3, 0.4]
+        }
+      ]
+
+      {:ok, data} = Data.from_rows(rows, schema)
+
+      meta = Data.get_field(data, "$meta")
+      assert meta == [%{"schema_dynamic" => "from_schema", "undefined_field" => "from_row"}]
+    end
+  end
 end

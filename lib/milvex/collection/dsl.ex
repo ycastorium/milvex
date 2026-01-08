@@ -219,6 +219,12 @@ defmodule Milvex.Collection.Dsl do
         default: false,
         doc: "Enable text analyzer for full-text search. Used with BM25 functions."
       ],
+      dynamic: [
+        type: :boolean,
+        default: false,
+        doc:
+          "Mark this field as dynamic. When `enable_dynamic_field` is enabled on the collection, values for this field are routed to the `$meta` field in Milvus and stored alongside other undefined dynamic fields."
+      ],
       description: [
         type: :string,
         doc: "Optional description for the field"
@@ -270,6 +276,14 @@ defmodule Milvex.Collection.Dsl do
         type: :boolean,
         default: false,
         doc: "Mark this field as a clustering key"
+      ],
+      dynamic: [
+        type: :boolean,
+        default: false,
+        doc:
+          "Mark this field as dynamic. When `enable_dynamic_field` is enabled on the collection, " <>
+            "values for this field are routed into Milvus' `$meta` field and stored dynamically " <>
+            "alongside other undefined fields."
       ],
       description: [
         type: :string,
@@ -464,6 +478,7 @@ defmodule Milvex.Collection.Dsl do
       Milvex.Collection.Verifiers.ValidateVectorDimensions,
       Milvex.Collection.Verifiers.ValidateVarcharLength,
       Milvex.Collection.Verifiers.ValidateArrayConfig,
-      Milvex.Collection.Verifiers.ValidateAutoId
+      Milvex.Collection.Verifiers.ValidateAutoId,
+      Milvex.Collection.Verifiers.ValidateDynamicField
     ]
 end

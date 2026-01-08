@@ -72,6 +72,7 @@ defmodule Milvex.Schema.Field do
           nullable: boolean(),
           is_partition_key: boolean(),
           is_clustering_key: boolean(),
+          is_dynamic: boolean(),
           default_value: term() | nil,
           struct_schema: [t()] | nil,
           enable_analyzer: boolean()
@@ -92,6 +93,7 @@ defmodule Milvex.Schema.Field do
     nullable: false,
     is_partition_key: false,
     is_clustering_key: false,
+    is_dynamic: false,
     enable_analyzer: false
   ]
 
@@ -228,6 +230,22 @@ defmodule Milvex.Schema.Field do
   end
 
   @doc """
+  Marks the field as a dynamic field.
+
+  Only valid for scalar types: bool, int8, int16, int32, int64, float, double, text, varchar, json.
+  Dynamic fields allow storing data that may not be strictly typed at the schema level.
+
+  ## Examples
+
+      Field.new("metadata", :json) |> Field.dynamic()
+      Field.varchar("extra", 256, dynamic: true)
+  """
+  @spec dynamic(t(), boolean()) :: t()
+  def dynamic(%__MODULE__{} = field, value \\ true) when is_boolean(value) do
+    %{field | is_dynamic: value}
+  end
+
+  @doc """
   Creates a primary key field with common defaults.
 
   ## Options
@@ -332,6 +350,7 @@ defmodule Milvex.Schema.Field do
       |> max_length(len)
       |> nullable(Keyword.get(opts, :nullable, false))
       |> enable_analyzer(Keyword.get(opts, :enable_analyzer, false))
+      |> dynamic(Keyword.get(opts, :dynamic, false))
 
     field =
       if desc = Keyword.get(opts, :description) do
@@ -365,6 +384,7 @@ defmodule Milvex.Schema.Field do
     field =
       new(name, type)
       |> nullable(Keyword.get(opts, :nullable, false))
+      |> dynamic(Keyword.get(opts, :dynamic, false))
 
     field =
       if desc = Keyword.get(opts, :description) do
@@ -481,7 +501,8 @@ defmodule Milvex.Schema.Field do
          :ok <- validate_vector_dimension(field),
          :ok <- validate_varchar_length(field),
          :ok <- validate_array_config(field),
-         :ok <- validate_primary_key(field) do
+         :ok <- validate_primary_key(field),
+         :ok <- validate_dynamic_field(field) do
       {:ok, field}
     end
   end
@@ -608,6 +629,30 @@ defmodule Milvex.Schema.Field do
 
   defp validate_primary_key(_), do: :ok
 
+  @dynamic_allowed_types [
+    :bool,
+    :int8,
+    :int16,
+    :int32,
+    :int64,
+    :float,
+    :double,
+    :varchar,
+    :text,
+    :json
+  ]
+
+  defp validate_dynamic_field(%{is_dynamic: true, data_type: type})
+       when type not in @dynamic_allowed_types do
+    {:error,
+     invalid_error(
+       :is_dynamic,
+       "only valid for scalar types (bool, int8, int16, int32, int64, float, double, varchar, text, json), got #{type}"
+     )}
+  end
+
+  defp validate_dynamic_field(_), do: :ok
+
   defp invalid_error(field, message) do
     Milvex.Errors.Invalid.exception(field: field, message: message)
   end
@@ -652,6 +697,7 @@ defmodule Milvex.Schema.Field do
       nullable: proto.nullable,
       is_partition_key: proto.is_partition_key,
       is_clustering_key: proto.is_clustering_key,
+      is_dynamic: proto.is_dynamic,
       enable_analyzer: type_params[:enable_analyzer] || false,
       element_type:
         if(proto.element_type != :None, do: data_type_from_proto(proto.element_type), else: nil)
