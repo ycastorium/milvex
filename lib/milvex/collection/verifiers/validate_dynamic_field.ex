@@ -3,13 +3,13 @@ defmodule Milvex.Collection.Verifiers.ValidateDynamicField do
   Verifies that dynamic fields are only used with valid scalar types.
 
   Dynamic fields are only supported for scalar types: bool, int8, int16, int32,
-  int64, float, double, varchar, and json. They cannot be used with vectors,
+  int64, float, double, varchar, text, and json. They cannot be used with vectors,
   arrays, or structs.
   """
 
   use Spark.Dsl.Verifier
 
-  @valid_dynamic_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :json]
+  @valid_dynamic_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :text, :json]
 
   @impl true
   def verify(dsl_state) do

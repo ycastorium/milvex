@@ -232,7 +232,7 @@ defmodule Milvex.Schema.Field do
   @doc """
   Marks the field as a dynamic field.
 
-  Only valid for scalar types: bool, int8, int16, int32, int64, float, double, varchar, json.
+  Only valid for scalar types: bool, int8, int16, int32, int64, float, double, text, varchar, json.
   Dynamic fields allow storing data that may not be strictly typed at the schema level.
 
   ## Examples
@@ -629,14 +629,14 @@ defmodule Milvex.Schema.Field do
 
   defp validate_primary_key(_), do: :ok
 
-  @dynamic_allowed_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :json]
+  @dynamic_allowed_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :text, :json]
 
   defp validate_dynamic_field(%{is_dynamic: true, data_type: type})
        when type not in @dynamic_allowed_types do
     {:error,
      invalid_error(
        :is_dynamic,
-       "only valid for scalar types (bool, int8, int16, int32, int64, float, double, varchar, json), got #{type}"
+       "only valid for scalar types (bool, int8, int16, int32, int64, float, double, varchar, text, json), got #{type}"
      )}
   end
 
