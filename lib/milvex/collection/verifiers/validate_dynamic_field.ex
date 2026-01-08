@@ -9,7 +9,18 @@ defmodule Milvex.Collection.Verifiers.ValidateDynamicField do
 
   use Spark.Dsl.Verifier
 
-  @valid_dynamic_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :text, :json]
+  @valid_dynamic_types [
+    :bool,
+    :int8,
+    :int16,
+    :int32,
+    :int64,
+    :float,
+    :double,
+    :varchar,
+    :text,
+    :json
+  ]
 
   @impl true
   def verify(dsl_state) do

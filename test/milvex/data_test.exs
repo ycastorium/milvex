@@ -537,10 +537,12 @@ defmodule Milvex.DataTest do
       {:ok, data} = Data.from_columns(columns, schema)
 
       assert Data.get_field(data, "title") == ["A", "B"]
+
       assert Data.get_field(data, "$meta") == [
-        %{"extra" => %{"key" => "val1"}},
-        %{"extra" => %{"key" => "val2"}}
-      ]
+               %{"extra" => %{"key" => "val1"}},
+               %{"extra" => %{"key" => "val2"}}
+             ]
+
       assert Data.get_field(data, "extra") == nil
     end
 

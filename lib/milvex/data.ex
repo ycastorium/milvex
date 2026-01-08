@@ -208,7 +208,8 @@ defmodule Milvex.Data do
       end)
       |> Map.new(fn {k, v} -> {k, Enum.reverse(v)} end)
 
-    has_dynamic_fields = schema.enable_dynamic_field or MapSet.size(dynamic_schema_field_names) > 0
+    has_dynamic_fields =
+      schema.enable_dynamic_field or MapSet.size(dynamic_schema_field_names) > 0
 
     if has_dynamic_fields do
       add_dynamic_fields(columns, rows, all_static_field_names, dynamic_schema_field_names)

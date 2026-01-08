@@ -222,7 +222,8 @@ defmodule Milvex.Collection.Dsl do
       dynamic: [
         type: :boolean,
         default: false,
-        doc: "Mark this field as dynamic. When `enable_dynamic_field` is enabled on the collection, values for this field are routed to the `$meta` field in Milvus and stored alongside other undefined dynamic fields."
+        doc:
+          "Mark this field as dynamic. When `enable_dynamic_field` is enabled on the collection, values for this field are routed to the `$meta` field in Milvus and stored alongside other undefined dynamic fields."
       ],
       description: [
         type: :string,

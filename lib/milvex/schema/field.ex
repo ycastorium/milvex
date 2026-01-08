@@ -629,7 +629,18 @@ defmodule Milvex.Schema.Field do
 
   defp validate_primary_key(_), do: :ok
 
-  @dynamic_allowed_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :text, :json]
+  @dynamic_allowed_types [
+    :bool,
+    :int8,
+    :int16,
+    :int32,
+    :int64,
+    :float,
+    :double,
+    :varchar,
+    :text,
+    :json
+  ]
 
   defp validate_dynamic_field(%{is_dynamic: true, data_type: type})
        when type not in @dynamic_allowed_types do
