@@ -16,6 +16,8 @@ spark_locals_without_parens = [
   varchar: 3,
   scalar: 2,
   scalar: 3,
+  timestamp: 1,
+  timestamp: 2,
   array: 3,
   array: 4,
   bm25: 2,

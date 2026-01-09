@@ -26,7 +26,19 @@ defmodule Milvex.Schema.Field do
   alias Milvex.Milvus.Proto.Schema.FieldSchema
   alias Milvex.Milvus.Proto.Schema.StructArrayFieldSchema
 
-  @scalar_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :json, :text]
+  @scalar_types [
+    :bool,
+    :int8,
+    :int16,
+    :int32,
+    :int64,
+    :float,
+    :double,
+    :varchar,
+    :json,
+    :text,
+    :timestamp
+  ]
   @vector_types [
     :binary_vector,
     :float_vector,
@@ -49,6 +61,7 @@ defmodule Milvex.Schema.Field do
           | :varchar
           | :json
           | :text
+          | :timestamp
           | :array
           | :struct
           | :array_of_struct
@@ -364,6 +377,41 @@ defmodule Milvex.Schema.Field do
   def scalar(name, type, opts \\ []) when type in @scalar_types and type != :varchar do
     field =
       new(name, type)
+      |> nullable(Keyword.get(opts, :nullable, false))
+
+    field =
+      if desc = Keyword.get(opts, :description) do
+        description(field, desc)
+      else
+        field
+      end
+
+    if default_val = Keyword.get(opts, :default) do
+      default(field, default_val)
+    else
+      field
+    end
+  end
+
+  @doc """
+  Creates a timestamp field (with timezone).
+
+  Milvus stores timestamps as `Timestamptz` - timestamp with timezone information.
+
+  ## Options
+    - `:nullable` - Allow null values (default: false)
+    - `:description` - Field description
+    - `:default` - Default value
+
+  ## Examples
+
+      Field.timestamp("created_at")
+      Field.timestamp("updated_at", nullable: true)
+  """
+  @spec timestamp(String.t(), keyword()) :: t()
+  def timestamp(name, opts \\ []) do
+    field =
+      new(name, :timestamp)
       |> nullable(Keyword.get(opts, :nullable, false))
 
     field =
@@ -700,6 +748,7 @@ defmodule Milvex.Schema.Field do
   defp data_type_to_proto(:varchar), do: :VarChar
   defp data_type_to_proto(:json), do: :JSON
   defp data_type_to_proto(:text), do: :Text
+  defp data_type_to_proto(:timestamp), do: :Timestamptz
   defp data_type_to_proto(:array), do: :Array
   defp data_type_to_proto(:struct), do: :Struct
   defp data_type_to_proto(:array_of_struct), do: :ArrayOfStruct
@@ -720,6 +769,7 @@ defmodule Milvex.Schema.Field do
   defp data_type_from_proto(:VarChar), do: :varchar
   defp data_type_from_proto(:JSON), do: :json
   defp data_type_from_proto(:Text), do: :text
+  defp data_type_from_proto(:Timestamptz), do: :timestamp
   defp data_type_from_proto(:Array), do: :array
   defp data_type_from_proto(:Struct), do: :struct
   defp data_type_from_proto(:ArrayOfStruct), do: :array_of_struct

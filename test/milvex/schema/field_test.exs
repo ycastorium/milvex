@@ -20,7 +20,19 @@ defmodule Milvex.Schema.FieldTest do
     end
 
     test "supports all scalar types" do
-      for type <- [:bool, :int8, :int16, :int32, :int64, :float, :double, :varchar, :json, :text] do
+      for type <- [
+            :bool,
+            :int8,
+            :int16,
+            :int32,
+            :int64,
+            :float,
+            :double,
+            :varchar,
+            :json,
+            :text,
+            :timestamp
+          ] do
         field = Field.new("test", type)
         assert field.data_type == type
       end
@@ -183,6 +195,23 @@ defmodule Milvex.Schema.FieldTest do
       field = Field.scalar("age", :int32)
       assert field.data_type == :int32
       assert field.nullable == false
+    end
+
+    test "timestamp/2 creates timestamp field" do
+      field = Field.timestamp("created_at")
+      assert field.name == "created_at"
+      assert field.data_type == :timestamp
+      assert field.nullable == false
+    end
+
+    test "timestamp/2 with nullable option" do
+      field = Field.timestamp("updated_at", nullable: true)
+      assert field.nullable == true
+    end
+
+    test "timestamp/2 with description option" do
+      field = Field.timestamp("created_at", description: "Creation time")
+      assert field.description == "Creation time"
     end
 
     test "array/3 creates array field" do
@@ -404,6 +433,14 @@ defmodule Milvex.Schema.FieldTest do
       assert proto.data_type == :Array
       assert proto.element_type == :VarChar
     end
+
+    test "converts timestamp field to proto" do
+      field = Field.timestamp("created_at")
+      proto = Field.to_proto(field)
+
+      assert proto.data_type == :Timestamptz
+      assert proto.name == "created_at"
+    end
   end
 
   describe "from_proto/1" do
@@ -483,6 +520,32 @@ defmodule Milvex.Schema.FieldTest do
       assert restored.max_length == original.max_length
       assert restored.enable_analyzer == original.enable_analyzer
     end
+
+    test "from_proto converts Timestamptz to timestamp" do
+      proto = %FieldSchema{
+        name: "created_at",
+        data_type: :Timestamptz,
+        is_primary_key: false,
+        autoID: false,
+        type_params: [],
+        nullable: true
+      }
+
+      field = Field.from_proto(proto)
+      assert field.data_type == :timestamp
+      assert field.nullable == true
+    end
+
+    test "roundtrip conversion preserves timestamp field" do
+      original = Field.timestamp("created_at", nullable: true, description: "Creation time")
+      proto = Field.to_proto(original)
+      restored = Field.from_proto(proto)
+
+      assert restored.name == original.name
+      assert restored.data_type == original.data_type
+      assert restored.nullable == original.nullable
+      assert restored.description == original.description
+    end
   end
 
   describe "type helpers" do
@@ -497,6 +560,7 @@ defmodule Milvex.Schema.FieldTest do
       types = Field.scalar_types()
       assert :int64 in types
       assert :varchar in types
+      assert :timestamp in types
       refute :float_vector in types
     end
 

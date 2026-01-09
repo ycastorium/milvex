@@ -278,6 +278,54 @@ defmodule Milvex.Collection.Dsl do
     ]
   }
 
+  @timestamp %Spark.Dsl.Entity{
+    name: :timestamp,
+    describe: """
+    Declares a timestamp field for storing date/time values with timezone.
+
+    Accepts DateTime structs, ISO 8601 strings, or integer microseconds since epoch.
+    Values are stored in UTC.
+    """,
+    examples: [
+      "timestamp :created_at",
+      "timestamp :updated_at, nullable: true",
+      "timestamp :deleted_at, nullable: true, description: \"Soft delete timestamp\""
+    ],
+    target: Milvex.Collection.Dsl.Field,
+    args: [:name],
+    schema: [
+      name: [
+        type: :atom,
+        required: true,
+        doc: "The name of the timestamp field"
+      ],
+      type: [
+        type: :atom,
+        default: :timestamp,
+        doc: "The data type (always `:timestamp`)"
+      ],
+      nullable: [
+        type: :boolean,
+        default: false,
+        doc: "Whether the field can be null"
+      ],
+      partition_key: [
+        type: :boolean,
+        default: false,
+        doc: "Mark this field as a partition key"
+      ],
+      clustering_key: [
+        type: :boolean,
+        default: false,
+        doc: "Mark this field as a clustering key"
+      ],
+      description: [
+        type: :string,
+        doc: "Optional description for the field"
+      ]
+    ]
+  }
+
   @array %Spark.Dsl.Entity{
     name: :array,
     describe: """
@@ -353,6 +401,7 @@ defmodule Milvex.Collection.Dsl do
       @sparse_vector,
       @varchar,
       @scalar,
+      @timestamp,
       @array
     ]
   }

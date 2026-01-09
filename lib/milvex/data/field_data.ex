@@ -22,6 +22,7 @@ defmodule Milvex.Data.FieldData do
   alias Milvex.Milvus.Proto.Schema.SparseFloatArray
   alias Milvex.Milvus.Proto.Schema.StringArray
   alias Milvex.Milvus.Proto.Schema.StructArrayField
+  alias Milvex.Milvus.Proto.Schema.TimestamptzArray
   alias Milvex.Milvus.Proto.Schema.VectorArray
   alias Milvex.Milvus.Proto.Schema.VectorField
 
@@ -122,6 +123,10 @@ defmodule Milvex.Data.FieldData do
       :json ->
         json_bytes = Enum.map(values, &encode_json/1)
         %ScalarField{data: {:json_data, %JSONArray{data: json_bytes}}}
+
+      :timestamp ->
+        string_values = Enum.map(values, &encode_timestamp_string/1)
+        %ScalarField{data: {:string_data, %StringArray{data: string_values}}}
     end
   end
 
@@ -177,6 +182,9 @@ defmodule Milvex.Data.FieldData do
   defp do_extract_scalar({:json_data, %JSONArray{data: values}}),
     do: Enum.map(values, &decode_json/1)
 
+  defp do_extract_scalar({:timestamptz_data, %TimestamptzArray{data: values}}),
+    do: Enum.map(values, &decode_timestamp/1)
+
   defp do_extract_scalar({:array_data, %ArrayArray{data: scalar_fields}}) do
     Enum.map(scalar_fields, &extract_scalar_values/1)
   end
@@ -218,13 +226,28 @@ defmodule Milvex.Data.FieldData do
     end
   end
 
-  defp build_scalar_field_data(field_name, values, %Field{data_type: data_type}) do
-    scalar_field = build_scalar_field(data_type, values)
+  defp build_scalar_field_data(field_name, values, %Field{
+         data_type: data_type,
+         nullable: nullable
+       }) do
+    has_nils = Enum.any?(values, &is_nil/1)
+
+    {non_nil_values, valid_data} =
+      if has_nils and nullable do
+        valid = Enum.map(values, &(not is_nil(&1)))
+        non_nils = Enum.reject(values, &is_nil/1)
+        {non_nils, valid}
+      else
+        {values, []}
+      end
+
+    scalar_field = build_scalar_field(data_type, non_nil_values)
 
     %FieldData{
       field_name: field_name,
       type: data_type_to_proto(data_type),
-      field: {:scalars, scalar_field}
+      field: {:scalars, scalar_field},
+      valid_data: valid_data
     }
   end
 
@@ -383,6 +406,53 @@ defmodule Milvex.Data.FieldData do
       {:ok, value} -> value
       {:error, _} -> bytes
     end
+  end
+
+  defp encode_timestamp_string(nil), do: nil
+
+  defp encode_timestamp_string(%DateTime{} = dt) do
+    DateTime.to_iso8601(dt)
+  end
+
+  defp encode_timestamp_string(%NaiveDateTime{} = ndt) do
+    ndt
+    |> DateTime.from_naive!("Etc/UTC")
+    |> DateTime.to_iso8601()
+  end
+
+  defp encode_timestamp_string(unix) when is_integer(unix) do
+    unix
+    |> DateTime.from_unix!(:microsecond)
+    |> DateTime.to_iso8601()
+  end
+
+  defp encode_timestamp_string(iso_string) when is_binary(iso_string) do
+    case DateTime.from_iso8601(iso_string) do
+      {:ok, dt, _offset} ->
+        DateTime.to_iso8601(dt)
+
+      {:error, _} ->
+        case NaiveDateTime.from_iso8601(iso_string) do
+          {:ok, ndt} ->
+            ndt
+            |> DateTime.from_naive!("Etc/UTC")
+            |> DateTime.to_iso8601()
+
+          {:error, reason} ->
+            raise ArgumentError, "Invalid timestamp format: #{iso_string}, reason: #{reason}"
+        end
+    end
+  end
+
+  defp decode_timestamp(iso_string) when is_binary(iso_string) do
+    case DateTime.from_iso8601(iso_string) do
+      {:ok, dt, _offset} -> dt
+      {:error, _} -> iso_string
+    end
+  end
+
+  defp decode_timestamp(unix_microseconds) when is_integer(unix_microseconds) do
+    DateTime.from_unix!(unix_microseconds, :microsecond)
   end
 
   defp encode_binary_vectors(vectors) do
@@ -547,6 +617,7 @@ defmodule Milvex.Data.FieldData do
   defp data_type_to_proto(:varchar), do: :VarChar
   defp data_type_to_proto(:json), do: :JSON
   defp data_type_to_proto(:text), do: :Text
+  defp data_type_to_proto(:timestamp), do: :Timestamptz
   defp data_type_to_proto(:array), do: :Array
   defp data_type_to_proto(:struct), do: :Struct
   defp data_type_to_proto(:array_of_struct), do: :ArrayOfStruct

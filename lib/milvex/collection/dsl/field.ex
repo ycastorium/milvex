@@ -43,7 +43,19 @@ defmodule Milvex.Collection.Dsl.Field do
     enable_analyzer: false
   ]
 
-  @scalar_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :json, :text, :varchar]
+  @scalar_types [
+    :bool,
+    :int8,
+    :int16,
+    :int32,
+    :int64,
+    :float,
+    :double,
+    :json,
+    :text,
+    :varchar,
+    :timestamp
+  ]
   @vector_types [
     :binary_vector,
     :float_vector,

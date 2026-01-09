@@ -15,6 +15,7 @@ defmodule Milvex.Data.FieldDataTest do
   alias Milvex.Milvus.Proto.Schema.SparseFloatArray
   alias Milvex.Milvus.Proto.Schema.StringArray
   alias Milvex.Milvus.Proto.Schema.StructArrayField
+  alias Milvex.Milvus.Proto.Schema.TimestamptzArray
   alias Milvex.Milvus.Proto.Schema.VectorField
 
   alias Milvex.Milvus.Proto.Schema.FieldData, as: FieldDataProto
@@ -77,6 +78,41 @@ defmodule Milvex.Data.FieldDataTest do
       scalar = FieldData.build_scalar_field(:json, [~s({"a":1}), ~s({"b":2})])
       assert {:json_data, %JSONArray{data: [~s({"a":1}), ~s({"b":2})]}} = scalar.data
     end
+
+    test "builds timestamp scalar field with DateTime values" do
+      dt1 = ~U[2025-01-01 00:00:00Z]
+      dt2 = ~U[2025-06-15 12:30:45Z]
+      scalar = FieldData.build_scalar_field(:timestamp, [dt1, dt2])
+      assert {:string_data, %StringArray{data: [s1, s2]}} = scalar.data
+      assert s1 == "2025-01-01T00:00:00Z"
+      assert s2 == "2025-06-15T12:30:45Z"
+    end
+
+    test "builds timestamp scalar field with NaiveDateTime values" do
+      ndt = ~N[2025-03-20 10:15:30]
+      scalar = FieldData.build_scalar_field(:timestamp, [ndt])
+      assert {:string_data, %StringArray{data: [s]}} = scalar.data
+      assert s == "2025-03-20T10:15:30Z"
+    end
+
+    test "builds timestamp scalar field with ISO 8601 strings" do
+      iso_string = "2025-05-01T23:59:59+08:00"
+      scalar = FieldData.build_scalar_field(:timestamp, [iso_string])
+      assert {:string_data, %StringArray{data: [s]}} = scalar.data
+      assert s == "2025-05-01T15:59:59Z"
+    end
+
+    test "builds timestamp scalar field with integer microseconds" do
+      us_value = 1_735_689_600_000_000
+      scalar = FieldData.build_scalar_field(:timestamp, [us_value])
+      assert {:string_data, %StringArray{data: [s]}} = scalar.data
+      assert s == "2025-01-01T00:00:00.000000Z"
+    end
+
+    test "builds timestamp scalar field with nil values" do
+      scalar = FieldData.build_scalar_field(:timestamp, [nil, ~U[2025-01-01 00:00:00Z]])
+      assert {:string_data, %StringArray{data: [nil, "2025-01-01T00:00:00Z"]}} = scalar.data
+    end
   end
 
   describe "extract_scalar_values/1" do
@@ -114,6 +150,27 @@ defmodule Milvex.Data.FieldDataTest do
       json_bytes = [Jason.encode!(%{key: "value"}), Jason.encode!(%{num: 42})]
       scalar = %ScalarField{data: {:json_data, %JSONArray{data: json_bytes}}}
       assert [%{"key" => "value"}, %{"num" => 42}] = FieldData.extract_scalar_values(scalar)
+    end
+
+    test "extracts timestamp values from string data" do
+      scalar = %ScalarField{
+        data: {:string_data, %StringArray{data: ["2025-01-01T00:00:00Z", "2025-06-15T12:30:45Z"]}}
+      }
+
+      [s1, s2] = FieldData.extract_scalar_values(scalar)
+      assert s1 == "2025-01-01T00:00:00Z"
+      assert s2 == "2025-06-15T12:30:45Z"
+    end
+
+    test "extracts timestamp values from timestamptz_data as DateTime" do
+      us1 = 1_735_689_600_000_000
+      us2 = 1_750_000_000_000_000
+      scalar = %ScalarField{data: {:timestamptz_data, %TimestamptzArray{data: [us1, us2]}}}
+      [dt1, dt2] = FieldData.extract_scalar_values(scalar)
+      assert %DateTime{} = dt1
+      assert %DateTime{} = dt2
+      assert DateTime.to_unix(dt1, :microsecond) == us1
+      assert DateTime.to_unix(dt2, :microsecond) == us2
     end
 
     test "returns empty list for nil data" do
@@ -335,6 +392,22 @@ defmodule Milvex.Data.FieldDataTest do
       proto = FieldData.to_proto("metadata", original, field)
       {_name, extracted} = FieldData.from_proto(proto)
       assert extracted == original
+    end
+
+    test "timestamp roundtrip encodes DateTime to ISO string" do
+      field = Field.timestamp("created_at")
+      original = [~U[2025-01-01 00:00:00Z], ~U[2025-06-15 12:30:45Z]]
+      proto = FieldData.to_proto("created_at", original, field)
+      {_name, extracted} = FieldData.from_proto(proto)
+      assert extracted == ["2025-01-01T00:00:00Z", "2025-06-15T12:30:45Z"]
+    end
+
+    test "timestamp roundtrip normalizes ISO strings to UTC" do
+      field = Field.timestamp("updated_at")
+      iso_strings = ["2025-05-01T23:59:59+08:00", "2025-01-01T00:00:00Z"]
+      proto = FieldData.to_proto("updated_at", iso_strings, field)
+      {_name, extracted} = FieldData.from_proto(proto)
+      assert extracted == ["2025-05-01T15:59:59Z", "2025-01-01T00:00:00Z"]
     end
   end
 
