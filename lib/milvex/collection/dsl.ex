@@ -25,7 +25,7 @@ defmodule Milvex.Collection.Dsl do
       end
   """
 
-  @scalar_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :json, :text, :timestamp]
+  @scalar_types [:bool, :int8, :int16, :int32, :int64, :float, :double, :json, :text]
   @array_element_types [
     :bool,
     :int8,
